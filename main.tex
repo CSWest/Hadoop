@@ -1,0 +1,784 @@
+\documentclass[a4paper, 12pt]{article}
+
+% english
+\usepackage[english]{babel}
+\usepackage{lmodern}
+
+% biblio
+\usepackage{csquotes}
+\usepackage[backend=biber, language=english]{biblatex}
+\addbibresource{./biblio.bib}
+
+% packages
+\usepackage{fullpage}       % really narrow margins
+\usepackage{graphicx}       % \includegraphics
+\usepackage{amsmath}        % \text
+\usepackage{multirow}       % \multirow   
+\usepackage{enumitem}       % \setitemsize
+\usepackage{pgf, tikz}      % graphe des états
+\usetikzlibrary{positioning}
+
+% misc
+\addto\captionsenglish{\def\chaptername{Part}}    % Part/Chapter
+\renewcommand\thesection{\arabic{section}}        % arabic numbers
+\setlength\parindent{0pt}                         % no indentation
+\setitemize{itemsep=0em}                          % no space between itms
+
+% code (default C++)
+\usepackage{listings}
+\usepackage{xcolor}
+\definecolor{keyword}{rgb}{0.76,0.18,0.64}
+\definecolor{directive}{rgb}{0.47,0.28,0.18}
+\definecolor{string}{rgb}{0.85,0.16,0.14}
+\definecolor{comment}{rgb}{0.43,0.65,0.38}
+\lstset{
+  language=C++,
+  tabsize=2,
+  keepspaces=true,
+  showspaces=false,
+  showtabs=false,
+  showstringspaces=false,
+  basicstyle=\ttfamily\footnotesize,
+  keywordstyle=\color{keyword}\ttfamily,
+  stringstyle=\color{string}\ttfamily,
+  commentstyle=\color{comment}\ttfamily,
+  morecomment=[l][\color{directive}]{\#}
+}
+% xml language
+\lstdefinelanguage{xml}{
+  morestring=[b]",
+  moredelim=[s]{>}{<},
+  morecomment=[s]{<?}{?>},
+  stringstyle=\color{string},
+  identifierstyle=\color{directive},
+  keywordstyle=\color{directive},
+  morekeywords={} % list attr here
+}
+
+\title{\textit{Hadoop} for Roboticists}
+\author{Olivier Deiss\\GeorgiaTech Lorraine\\Metz, France}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+%\listoffigures
+
+\section{Introduction}
+
+The objective of this tutorial is to give an overview of \textit{Hadoop}, its possibilities and its use in Robotics, as well as to provide explanations about the setup, design of mapreduce jobs and troubleshooting. \textit{Hadoop} is a powerful software: while this tutorial is enough to get an overview and a better understanding of the framework and how to use it, we won't be covering here all the possibilities that \textit{Hadoop} offers.
+
+~\\
+This tutorial is based on my experience while working on a Special Problem. I included all the information I have been looking for and everything I think can be useful when learning how to use \textit{Hadoop}. Finally, while reading this tutorial, be aware that I am far from being a \textit{Hadoop} expert and that I just started to learn about \textit{Hadoop}. This is just a summary of the best of my knowledge at the time of writing.
+
+\section{About \textit{Hadoop}}
+
+  \subsection{What is it?}
+
+In short, Apache\textsuperscript{TM} \textit{Hadoop}\textsuperscript{\textregistered} is an open-source software framework for distributed storage and distributed processing of very large datasets on computer clusters built from commodity hardware. The true advantage of \textit{Hadoop} is how it handles scalability and insane amounts of unstructured data. \textit{Hadoop} works well on clusters of thousands of nodes. Here is a definition of the software from Apache's \textit{Hadoop} page:
+
+\begin{quote}
+It is designed to scale up from single servers to thousands of machines, each offering local computation and storage. Rather than rely on hardware to deliver high-availability, the library itself is designed to detect and handle failures at the application layer, so delivering a highly-available service on top of a cluster of computers, each of which may be prone to failures.
+\end{quote}
+
+\textit{Hadoop} is supported by Hortonworks and Cloudera. Facebook and Yahoo! have been the first companies to massively use \textit{Hadoop}; the software is now used by a majority of companies.
+
+~\\
+Google's research papers inspired the \textit{Hadoop} File System and the \textit{MapReduce} implementation.
+
+  \subsection{How does it work?}
+
+    \subsubsection{Components}
+  
+\textit{Hadoop} is the union of \textit{base modules} and lots of other modules built on top of \textit{Hadoop}. We will only focus on the \textit{base modules} here. The base modules are as follow:
+\begin{itemize}
+  \item \textit{\textit{Hadoop} Common}: this is a core module that provides libraries to the other modules.
+  \item \textit{\textit{Hadoop} Distributed File System (HDFS)}: HDFS is a distributed filesystem on which we will be storing the data we want to analyze using \textit{Hadoop}.
+  \item \textit{\textit{Hadoop} YARN}: YARN is used for the scheduling of the applications and the resource management.
+  \item \textit{\textit{Hadoop} MapReduce}: \textit{MapReduce} is an implementation of the \textit{MapReduce} programming model.
+\end{itemize}
+
+If you want to work with data, the first step is to upload it on HDFS. The next step is to write a \textit{MapReduce} job that will be later run on the cluster. The scheduling will be taken care of by YARN.
+
+~\\
+Among the other available auxiliary projects built on top of \textit{Hadoop}, Hive gives an SQL-like interface to run queries on the data stored on HDFS. Another one, HBase, is a distributed database based on Google's BigTable for storing large quantities of sparse data.
+
+    \subsubsection{Writing jobs}
+
+\textit{Hadoop} is written in Java and as a result, most of the documentation and online support is in Java. However, it is possible to write jobs in C++ using \textit{Hadoop} Pipes. This is what we will be doing since we are roboticists who want to be able to use the \textit{ROS} API in our jobs.
+
+~\\
+Jobs are the applications that are run on the data stored on HDFS. Actually, \textit{Hadoop} can also be run as a standalone application, without HDFS, but we won't be using \textit{Hadoop} this way. A simple application consists of two parts: a Mapper and a Reducer. The framework reads the input data and provides pairs \texttt{<key, value>} to the Mapper. By default, \textit{Hadoop} provides pairs with the following format: \texttt{<offset, line>}. Applications can provide their own Reader and Writers to customize these operations.
+
+~\\
+The Mapper receives these pairs and outputs another pair. This is all it does, and yet allows any kind of computation -- we will see examples later. The Mapper can put whatever information is useful in these pairs. The Reducer receives the pairs from the Mapper and outputs the final pairs \texttt{<key, value>} that will be the output of the job.
+
+    \subsubsection{Cluster Architecture}
+
+For huge datasets that span over multiple racks, HDFS provides location awareness: the processing happens on nodes that are close to the requested data. This reduces network traffic. The setup we will describe here is a much smaller one, using a cluster one master node and five slave nodes.
+
+~\\
+A typical \textit{Hadoop} setup has the following structure:
+\begin{itemize}
+  \item \textit{Master} node: this node stores information about where is stored a specific information on the cluster. If this node becomes unavailable, the cluster as a whole becomes unavailable. For this reason, it is possible to run a second process on the same machine, which will handle the requests if the main process crashes.
+  \item \textit{Slave} nodes: these nodes are the workers. They store the data and execute the jobs when requested.
+\end{itemize}
+
+In this tutorial, we will use the cluster as a model the cluster I have been using which has the following structure:
+
+\begin{center}
+\begin{tikzpicture}
+% machines
+\node[minimum width=4cm, draw, rectangle] (M) at (0, 1) {\texttt{Master}};
+\node[minimum width=2.2cm, draw, rectangle] (S1) at (-1, -1) {\texttt{Slave 1}};
+\node[minimum width=2.2cm, draw, rectangle] (S2) at (2, -1) {\texttt{Slave 2}};
+\node[minimum width=2.2cm, rectangle] (Sd) at (5, -1) {\texttt{...}};
+\node[minimum width=2.2cm, draw, rectangle] (S5) at (8, -1) {\texttt{Slave 5}};
+\node[below=0.05cm of S1] (IPS1) {\texttt{192.168.0.101}};
+\node[below=0.05cm of S2] (IPS2) {\texttt{192.168.0.102}};
+\node[below=0.05cm of S5] (IPS5) {\texttt{192.168.0.105}};
+\node[above=0.05cm of M] (IPME) {\texttt{192.93.8.192}};
+\node[below=0.05cm of M] (IPMI) {\texttt{192.168.0.1}};
+
+\draw ([xshift=0.5cm]M.south west) |- + (0, -1) -| (S1);
+\draw (S1.south) + (0, 1) -| (S2);
+\draw (S2.south) + (0, 1) -| (S5);
+\end{tikzpicture}
+\end{center}
+
+Here is a list of the processes that run on the nodes. Some processes are used for HDFS while the other category is used during the \textit{MapReduce} phase:
+\begin{itemize}
+  \item \textit{NameNode}, \textit{JobTracker}: these processes run on the Master node. The NameNode is used as a registry of the data in the cluster while the JobTracker is used during the \textit{MapReduce} phase. A SecondaryNameNode can be run for the safety reasons discussed just above.
+  \item \textit{DataNode}, \textit{TaskTracker}: these processes belong to the slaves. Note that it is also possible to run these processes on the Master node in small clusters. The DataNode handles the storage and the TaskTracker becomes useful during the \textit{MapReduce} phase.
+\end{itemize}
+
+\section{Setting Up a \textit{Hadoop} Cluster}
+
+The single node setup is well explained on the Apache tutorial \cite{hadoop_single_node_setup}. Instead, we will directly go to the setup of a cluster of multiple nodes. We will then run the example mapreduce jobs, and we will start developing jobs in C++ in the next section.
+
+~\\
+We will start by installing \textit{Hadoop} on all our machines. We will then setup all the tools needed by \textit{Hadoop} and we will configure our \textit{Hadoop} installation.
+
+  \subsection{Installing \textit{Hadoop}}
+  
+Here, we will almost be following the Apache tutorial \cite{hadoop_single_node_setup}. The first step is to create a \textit{Hadoop} user: let's call it \textit{hadoop}, and everything \textit{Hadoop}-related we will do will be done with this user. I have been using \textit{Hadoop} 2.7.3 while working on this tutorial, you can get it here: http://hadoop.apache.org/releases.html. Install it wherever you find convenient, I chose \textit{/home/hadoop/bin}. We will also need to install Java if it is not already installed. \textit{Hadoop} 2.7 and later versions require Java 7 \cite{hadoop_java_versions}.
+
+~\\
+Assuming Java and \textit{Hadoop} are correctly installed, update your \textit{.bashrc} as follow, in order to give \textit{Hadoop} everything it needs to work properly. Here is what I used on my setup:
+
+\begin{verbatim}
+  export HADOOP_HOME=/home/hadoop/bin/hadoop-2.7.3
+  export JAVA_HOME=/home/hadoop/bin/jdk1.8.0_102
+  export PATH=${JAVA_HOME}/bin:${PATH}
+  export HADOOP_CLASSPATH=${JAVA_HOME}/lib/tools.jar
+\end{verbatim}
+
+Note that \textit{HADOOP\_HOME} is not required, but it will make it easier for us to use this variable to refer to where \textit{Hadoop} is installed.  In the same file, I also decided to add bin folders to my path. We will be using tools in \textit{HADOOP\_HOME/sbin}, which contains useful scripts, and in \textit{HADOOP\_HOME/bin}, which contains hadoop and hdfs:
+
+\begin{verbatim}
+  export PATH=${HADOOP_HOME}/sbin/:${HADOOP_HOME}/bin/:${PATH}
+\end{verbatim}
+
+We now jump to the configuration of \textit{Hadoop}. Four files, on each machine, need to be correctly updated. There is one file for each base module. The read-only versions, with the default values, have names \textit{base-module-default.xml}. The files that will need to be updated on the machines have the \textit{-site.xml} suffix instead. They are listed below:
+\begin{itemize}
+  \item \textit{HADOOP\_HOME/etc/hadoop/core-site.xml}: this file contains the core configuration. One important setting we will put in there is how to reach the filesystem.
+  \item \textit{HADOOP\_HOME/etc/hadoop/hdfs-site.xml}: this is the configuration of the filesystem: the replication level, where to store the data, and the different types of nodes.
+  \item \textit{HADOOP\_HOME/etc/hadoop/yarn-site.xml}: configuration for YARN, like how to reach the ResourceManager.
+  \item \textit{HADOOP\_HOME/etc/hadoop/mapred-site.xml}: this file contains the configuration for the MapReduce jobs: they need to know how to reach the JobTracker.
+\end{itemize}
+
+All the configuration goes into these four files. The parameters will influence the way \textit{Hadoop} performs the tasks and you should have a look at the read-only versions of these files for a detailed explanation of the different parameters \cite{hadoop_core_default} \cite{hadoop_hdfs_default} \cite{hadoop_yarn_default} \cite{hadoop_mapred_default}.
+
+~\\
+Here I give the set of parameters that I have been using with my \textit{Hadoop} setup. This configuration works well for simple tasks but you will likely need to tune the parameters if you plan to make extensive use of \textit{Hadoop}.
+
+    \subsubsection{Master Node}
+
+The configuration differs from master and slave nodes. We will be listing here the minimum set of parameters that need to be set on the master node's configuration files. All we need to do is put the following \texttt{<property>} tags between the \texttt{<configuration>} and \texttt{</configuration>} tags:
+
+\begin{itemize}
+  \item \textit{core-site.xml}: here we will be telling hadoop how to reach the NameNode. Since our NameNode is the Master node, this parameter should link to the Master node:
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>fs.defaultFS</name>
+        <value>hdfs://192.93.8.197:9000</value>
+      </property>
+    \end{lstlisting}
+  \item \textit{hdfs-site.xml}: in this file we can set the replication level and where to store the files on the machine. We choose a replication level of 3, note that this replication level should approximately equal to the square root of the number of nodes in your cluster \cite{hadoop_mapred_default}:
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>dfs.replication</name>
+        <value>3</value>
+      </property>
+      <property>
+        <name>dfs.namenode.name.dir</name>
+        <value>file:///home/hadoop/hadoop_data/namenode</value>
+      </property>
+    \end{lstlisting}
+  \item \textit{yarn-site.xml}: this is the configuration for YARN. Here, we tell YARN how to reach the ResourceManager, and that we want to perform MapReduce operations:
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>yarn.nodemanager.aux-services</name>
+        <value>mapreduce_shuffle</value>
+      </property>
+      <property>
+        <name>yarn.resourcemanager.hostname</name>
+        <value>192.93.8.197</value>
+      </property>
+    \end{lstlisting}
+  \item \textit{mapred-site.xml}: last, we need to give the address of the JobTracker to MapReduce, and we can also set the replication level for the submitted jobs. By default, the value for \texttt{mapreduce.client.submit.file.replication} is set to 10, which will lead to under-replicated blocks in your setup if not changed.
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>mapreduce.jobtracker.address<name>
+        <value>192.93.8.197:54311</value>
+      </property>
+      <property>
+        <name>mapreduce.client.submit.file.replication</name>
+        <value>2<value>
+      </property>
+    \end{lstlisting}
+\end{itemize}
+
+    \subsubsection{Slave Nodes}
+
+Now let's see the configuration of the slave nodes. Here again we need to configure the four files listed above, but the configuration is exactly the same for \textit{core-site.xml} and \textit{yarn-site.xml}.
+    
+\begin{itemize}
+  \item \textit{hdfs-site.xml}: the configuration of HDFS will now require us to specify where to store the data, hence we will be using the property \texttt{dfs.datanode.data.dir} instead of \texttt{dfs.namenode.name.dir}:
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>dfs.replication</name>
+        <value>3</value>
+      </property>
+      <property>
+        <name>dfs.datanode.data.dir</name>
+        <value>file:///home/hadoop/hadoop_data/datanode</value>
+      </property>
+    \end{lstlisting}
+  \item \textit{mapred-site.xml}: in this file we will be adding one more property compared to the configuration for the Master node, in order to tell the worker nodes to use YARN as their MapReduce framework:
+    \lstset{language=xml}
+    \begin{lstlisting}
+      <property>
+        <name>mapreduce.jobtracker.address<name>
+        <value>192.93.8.197:54311</value>
+      </property>
+      <property>
+        <name>mapreduce.client.submit.file.replication</name>
+        <value>2<value>
+      </property>
+      <property>
+        <name>mapreduce.framework.name</name>
+        <value>yarn<value>
+      </property>
+    \end{lstlisting}
+\end{itemize}
+    
+  
+  \subsection{Hostnames, \textit{SSH}}
+  
+Before we can start the nodes, we need to setup \textit{ssh} on all the machines and set the hostnames of each as well. This is really important, and can be the source of lots of errors if not set right at first. \textit{Hadoop} communicates over \textit{ssh} between different nodes. It also uses the machines hostnames rather than their IP addresses.
+
+~\\
+Therefore we need to set up these two things. First, let's get \textit{ssh} working. \textit{Hadoop} requires that each node can reach any other node over \textit{ssh}, without a passphrase \cite{hadoop_single_node_setup}. If you cannot do so, running the following commands should solve the issue:
+
+\begin{verbatim}
+  $ ssh-keygen -t dsa -P '' -f /home/hadoop/.ssh/id_dsa
+  $ cat /home/hadoop/.ssh/id_dsa.pub >> /home/hadoop/.ssh/authorized_keys
+  $ chmod 0600 /home/hadoop/.ssh/authorized_keys
+\end{verbatim}
+
+If \textit{ssh} is correctly configured, we can set the hostnames of our machines. On each machine, we need to update \textit{/etc/hosts} as well as \textit{/etc/hostname}.
+
+    \subsubsection{Slave Nodes}
+    
+On the Slave nodes, let's start by setting the hostname of each machine. On my setup, I have the hostnames \texttt{slave1} to \texttt{slave5}.
+
+~\\
+Regarding the \textit{/etc/hosts} file, each worker node should have access to all the other nodes. Each of my slave nodes has the following file:
+
+\begin{verbatim}
+  127.0.0.1       localhost
+  192.168.0.101   slave1
+  192.168.0.102   slave2
+  192.168.0.103   slave3
+  192.168.0.104   slave4
+  192.168.0.105   slave5
+  192.168.0.1     cluster3
+\end{verbatim}
+
+    \subsubsection{Master Node}
+    
+On the Master node, we will need to have a list of all the available workers, in addition to correctly setting up the files \textit{/etc/hostname} and \textit{/etc/hosts}. The hostname of my master node is \texttt{cluster3}, and its \textit{hosts} file looks like the following:
+
+\begin{verbatim}
+  128.0.0.1       localhost localhost
+  127.0.1.1       cluster3.domain.fr cluster3
+  192.168.0.101   slave1 slave1
+  192.168.0.102   slave2 slave2
+  192.168.0.103   slave3 slave3
+  192.168.0.104   slave4 slave4
+  192.168.0.105   slave5 slave5
+\end{verbatim}
+
+As stated above, we will also need to indicate what machines are available as masters or slaves in the \textit{Hadoop} configuration. This is done in the files \textit{masters} and \textit{slaves} in \textit{HADOOP\_HOME/etc/hadoop}. If these files don't exist on your setup, just create them with this name.
+
+~\\
+For \textit{HADOOP\_HOME/etc/hadoop/masters}, we only have one master node so the file has just one entry:
+
+\begin{verbatim}
+  cluster3
+\end{verbatim}
+
+For \textit{HADOOP\_HOME/etc/hadoop/slaves}, I have listed the hostnames of the five available worker nodes:
+
+\begin{verbatim}
+  slave1
+  slave2
+  slave3
+  slave4
+  slave5
+\end{verbatim}
+
+  \subsection{Starting the Cluster}
+  
+Everything should now be correctly set up and we should be able to run the cluster. We first need to format the filesystem:
+
+\begin{verbatim}
+  $ hdfs namenode -format
+\end{verbatim}
+
+Now that the filesystem is formatted, we can create our home folder where we will later upload our input files:
+
+\begin{verbatim}
+  $ hdfs dfs -mkdir -p /user/hadoop
+\end{verbatim}
+
+We can now start HDFS, then YARN. The scripts are located in \textit{HADOOP\_HOME/sbin}:
+
+\begin{verbatim}
+  $ sbin/start-dfs.sh
+  $ sbin/start-yarn.sh
+\end{verbatim}
+
+If you have added this folder to your \texttt{PATH}, you should be able to run them without specifying the folder. Alternatively, you can run \texttt{start-all.sh}, which works well and starts both at once, even though it is deprecated. If you run \texttt{jps}, you should see this list on the master node:
+\begin{itemize}
+  \item NameNode
+  \item SecondaryNameNode
+  \item ResourceManager
+\end{itemize}
+
+If you run the same command on one of the slaves, you should see this list instead:
+\begin{itemize}
+  \item DataNode
+  \item NodeManager
+\end{itemize}
+
+Anytime, you can go to http://\_IP\_:50070 -- with the IP address of the master node -- to see the nodes usage in real-time. You can monitor all the applications at http://\_IP\_:8088. Tools are also available in command line:
+
+\begin{verbatim}
+  $ hdfs dfsadmin -printTopology   # displays a topology of the setup
+  $ hdfs dfsadmin -report          # creates a complete report
+\end{verbatim}
+
+  \subsection{MapReduce Example}
+
+To make sure our cluster is correctly set up, let's try to run a first mapreduce job. An job is provided in the \textit{Hadoop} installation. It just counts the words in the input files and displays them with the associated count. 
+
+~\\
+To run this example we first need to create our input. You can just copy all the \textit{xml} files in \textit{HADOOP\_HOME/etc/hadoop} in a folder \textit{input}, and upload this folder on HDFS:
+
+\begin{verbatim}
+  HADOOP_HOME $ mkdir input
+  HADOOP_HOME $ cp etc/hadoop/*.xml input
+  HADOOP_HOME $ hdfs dfs -put input .
+\end{verbatim}
+
+You can make sure the folder has been correctly uploaded by running \texttt{hdfs dfs -ls}. We are now ready to launch the job:
+
+\begin{verbatim}
+  $ hadoop jar \
+           share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.3.jar \
+           grep input output 'dfs[a-z.]+'
+\end{verbatim}
+
+This command tells to use \textit{Hadoop} to launch a jar, located in \textit{HADOOP\_HOME/share/...}. Then \textit{Hadoop} will launch the class \texttt{grep} -- not the command-line grep tool -- to perform the job. It will use \textit{input} as its input folder and will output the results in \textit{output}. Finally, the results will contain all the words that match the regular expression \texttt{dfs[a-z.]+}.
+
+~\\
+After a few seconds, the job should complete. You can check the GUI anytime to check if everything is working properly. If the job ran successfully, the output is available in \textit{output}. We can read it from the filesystem, or download it and then read it:
+
+\begin{verbatim}
+  $ hdfs dfs -cat output/*                        # read from HDFS
+  $ hdfs dfs -get output output && cat output/*   # download then read
+\end{verbatim}
+
+If everything worked with no problem, we are ready to go to the next step, where we will be using both \textit{ROS} and \textit{Hadoop Pipes} in a C++ mapreduce job. You can find more information about writing jobs in Java, and tutorials on the Apache website \cite{hadoop_mapreduce_tutorial}.
+
+\section{Writing Jobs in C++ using \textit{Hadoop Pipes}}
+
+We now have a working installation of \textit{Hadoop}, but we can only work with Java. Our goal is to be able to write jobs in C++, combining \textit{ROS} and \textit{Hadoop} in the same job. \textit{Hadoop} provides \textit{Hadoop Pipes}, which allows us to write jobs in C++. We will first see how to get \textit{Hadoop Pipes} working, and then we will need to work a bit more to get \textit{Hadoop Pipes} and \textit{ROS} working on the same app. 
+
+~\\
+Prior to that, if you want to familiarize yourself with the MapReduce framework, you can find lots of examples of jobs online. Even though they are in Java, it is a good start to get an intuition of how jobs should be written. You can follow the Apache tutorial on MapReduce \cite{hadoop_mapreduce_tutorial}, or this great tutorial \cite{slideshare_tuto}.
+
+  \subsection{Running a \textit{Hadoop Pipes} job}
+  
+We will start with a simple example, following \cite{smith_pipes}. The code we are going to use in our first example is available in appendix \ref{wordcount}. We will need a Makefile in order to compile this program. This one will work, assuming you are on a 64-bit version:
+
+\begin{verbatim}
+  CC             = g++
+  HADOOP_INSTALL = /home/hadoop/bin/hadoop-2.7.3
+  CPPFLAGS       = -m64 -std=c++00x -I$(HADOOP_INSTALL)/include
+  LIBS           = -L$(HADOOP_INSTALL)/lib -lhadooppipes -lhadoop
+                   -lhadooputils -lcrypto -lpthread -lssl
+
+  word_count: word_count.cpp
+    $(CC) $(CPPFLAGS) $< -o $@ -Wall $(LIBS) -g -O2
+\end{verbatim}
+
+You might need to install additional packages like \texttt{libssl-dev} to be able to compile without errors. Then compile using \texttt{make word\_count}. If you are getting errors make sure you correctly set \texttt{HADOOP\_INSTALL} and that all the libraries are installed.
+
+~\\
+If you managed to compile the program, we will first need to upload it on the filesystem before we can run it:
+
+\begin{verbatim}
+  $ hdfs dfs -put word_count .
+\end{verbatim}
+
+Assuming you still have the input folder from the previous example, you can now run the job. If you did not previsouly delete the old output folder, you will get an error. To delete the old \textit{output} folder:
+
+\begin{verbatim}
+  $ hdfs dfs -rm -r -f output
+\end{verbatim}
+
+You can now run the job:
+
+\begin{verbatim}
+  $ hadoop pipes -D hadoop.pipes.java.recordreader=true \
+                 -D hadoop.pipes.java.recordwriter=true \
+                 -input input -output output \
+                 -program word_count
+\end{verbatim}
+
+The first two options tell \textit{Hadoop} to use the default Java RecordReader and RecordWriter classes. It is possible to implement these classes to get a custom behavior, but I could not find much documentation about this. There exists an example, \textit{wordcount-nopipe.cc}, in appendix \ref{wordcountnopipe}, that shows how to do that. Be aware that this only works with local file reads though. Other examples are provided online but without documentation. I also included them in the appendices.
+
+~\\
+If everything ran successfully, we can print the output:
+
+\begin{verbatim}
+  $ hdfs dfs -cat output/*
+\end{verbatim}
+  
+We now managed to get \textit{Hadoop Pipes} working. In the next section, we will see how to use \textit{Hadoop Pipes} and \textit{ROS} for writing our jobs.
+
+  \subsection{Using \textit{Hadoop Pipes} with \textit{ROS}}
+
+    \subsubsection{Creating new Libraries}
+
+The following will help you understand how to write jobs using the C++ \textit{ROS} API. If you do not want to use \textit{ROS}, you can skip this section. Unfortunately, the provided \textit{Hadoop} libraries don't work well with the \textit{ROS} libraries. This is related to the compiler Application Binary Interface (ABI). \textit{ROS} and the \textit{Hadoop} library don't use the same ABI, hence they work poorly together. 
+
+~\\
+To get them working, you will need to recompile \textit{Hadoop} from source. Following the steps on the Apache guide \cite{native_libs}, run the following commands:
+
+\begin{verbatim}
+  mvn package -Pdist,native -DskipTests -Dtar
+\end{verbatim}
+
+In order to compile \textit{Hadoop} successfully, you will need to install \texttt{protoc} -- Protocol Buffers -- version 2.5.0 and this version only. You can get it on Google's github \cite{google_github}. The archive should be available at: https://github.com/google/protobuf/archive/v2.5.0.tar.gz.
+
+~\\
+You will get the newly-bilt library in \textit{hadoop-dist/target/hadoop-2.7.3/lib/native}. From now on, use these libraries instead of the ones in \textit{HADOOP\_HOME/lib}.
+
+    \subsubsection{A Job with \textit{ROS} and \textit{Hadoop Pipes}}
+  
+We can now go back to our initial goal of compiling a job with \textit{Hadoop Pipes} that makes use of the \textit{ROS} API. We will need to update our Makefile to link the \textit{ROS} libraries. Note that I've put the newly-built libraries in \textit{/home/hadoop/lib/hadoop/lib}.
+
+\begin{verbatim}
+  CC             = g++
+  HADOOP_INSTALL = /home/hadoop/bin/hadoop-2.7.3
+  CPPFLAGS       = -m64 -std=c++00x -I$(HADOOP_INSTALL)/include
+                   -I/opt/ros/kinetic/include
+  LIBS           = -L/home/hadoop/lib/hadoop/lib -lhadooppipes -lhadoop
+                   -lhadooputils -lcrypto -lpthread -lssl
+                   -L/opt/ros/kinetic/lib -lroscpp -lrosconsole -lrostime
+                   -lrosbag -lrosbag_storage
+
+  ros_example: ros_example.cpp
+    $(CC) $(CPPFLAGS) $< -o $@ -Wall $(LIBS) -g -O2
+\end{verbatim}
+
+\section{Troubleshooting}
+
+Before even being able to write this simple tutorial, I have come a long way and had to face and solve lots of issues. I tried to list them all here with ways to solve them. They were mostly due to configuration problems so you might not have as many errors as I did. Otherwise this section is the right one.
+
+  \subsection{Starting \textit{Hadoop}}
+
+    \subsubsection*{All the processes did not start}
+    
+After running \texttt{start-all.sh} or \texttt{start-dfs.sh} and \texttt{start-yarn.sh}, you should always check with \texttt{jps} if all the processes started successfully. If they did not, you will find why in the logs. Most likely, you've been trying to restart them too quickly and the ports are reserved. You can check what process is using your port with:
+
+\begin{verbatim}
+  sudo netstat -ap | grep :50090
+\end{verbatim}
+
+Then kill this process and try again.
+
+    \subsubsection*{Hadoop does not work after a restart}
+    
+Make sure you have correctly set the folders for \textit{Hadoop} in \textit{core-site.xml} on all the machines. By default, \textit{Hadoop} writes in \textit{/tmp}.
+
+  \subsection{MapReduce}
+
+Let's start with issues when launching a job. First you should go have a look in the log files. They are in \textit{HADOOP\_HOME/logs/user} and will always tell you the source of the error. Alternatively, you can check if everything is ok from a configuration aspect with:
+
+\begin{verbatim}
+  $ hdfs dfsadmin -report
+\end{verbatim}
+  
+    \subsubsection*{Running a Job Fails}
+
+Hadoop will not overwrite an output folder. You should always make sure to delete the previous output folders or to specify a different folder for later jobs. If \textit{Hadoop} is trying to reach a node and is having trouble, check if all the nodes are up. Sometimes some nodes are \textit{decommissionned} and you need to start the right processes again. Running \texttt{start-all.sh} from the master should launch all the missing nodes.
+   
+    \subsubsection*{The job hangs at \textit{map 0\%, reduce 0\%}}
+
+Make sure you have set the hostnames right, and that you can \textit{ssh} to any node without a passphrase. In any case, the logs should tell you what happened, but this issue happened to me due to network issues.
+    
+  \subsection{Monitoring}
+  
+    \subsubsection*{Positive amount of under-replicated blocks}
+    
+You need to check if your settings for replication are correctly set. Also, make sure \texttt{mapreduce.client.submit.file.replication} is set, otherwise its default value of 10 will lead to under-replicated blocks if your cluster has less than ten machines.
+
+\section{Conclusion}
+
+In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We have also studied how to compile jobs for \textit{Hadoop} in C++, using \textit{Hadoop Pipes}, and how to use \textit{ROS} for our jobs. I hope you managed to set up your own cluster and that this document has been helpful. Now that your \textit{Hadoop} is working, it's time to write jobs!
+
+\newpage
+\appendix
+\addtocontents{toc}{\setcounter{tocdepth}{-1}}
+
+  \section{WordCount.cpp}
+  \label{wordcount} 
+
+\begin{lstlisting}
+#include <algorithm>
+#include <limits>
+#include <string>
+
+#include "stdint.h"
+
+#include "hadoop/Pipes.hh"
+#include "hadoop/TemplateFactory.hh"
+#include "hadoop/StringUtils.hh"
+
+class WordCountMapper : public HadoopPipes::Mapper {
+ public:
+  WordCountMapper(HadoopPipes::TaskContext& context) {}
+  // map function: receives a line, outputs (word,"1") to reducer.
+  void map(HadoopPipes::MapContext& context) {
+    // get line of text
+    std::string line = context.getInputValue();
+    // split it into words
+    std::vector<string> words = HadoopUtils::splitString(line, " ");
+    // emit each word tuple (word, "1")
+    for (unsigned int i=0 ; i < words.size() ; i++) {
+      context.emit(words[i], HadoopUtils::toString(1));
+    }
+  }
+};
+ 
+class WordCountReducer : public HadoopPipes::Reducer {
+ public:
+  WordCountReducer(HadoopPipes::TaskContext& context) {}
+  void reduce(HadoopPipes::ReduceContext& context) {
+    int count = 0;
+    // get all tuples with the same key, and count their numbers
+    while (context.nextValue()) {
+      count += HadoopUtils::toInt(context.getInputValue());
+    }
+    // emit (word, count)
+    context.emit(context.getInputKey(), HadoopUtils::toString(count));
+  }
+};
+ 
+int main(int argc, char *argv[]) {
+  return HadoopPipes::runTask(
+    HadoopPipes::TemplateFactory<WordCountMapper,
+                                 WordCountReducer>()
+  );
+} 
+\end{lstlisting}
+
+  \newpage
+  \section{WordCount-NoPipe.cc}
+  \label{wordcountnopipe}
+  
+\begin{lstlisting}
+/**
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+ * implied. See the License for the specific language governing
+ * permissions and limitations under the License.
+ */
+
+#include "hadoop/Pipes.hh"
+#include "hadoop/TemplateFactory.hh"
+#include "hadoop/StringUtils.hh"
+#include "hadoop/SerialUtils.hh"
+
+#include <stdio.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+
+const std::string WORDCOUNT = "WORDCOUNT";
+const std::string INPUT_WORDS = "INPUT_WORDS";
+const std::string OUTPUT_WORDS = "OUTPUT_WORDS";
+
+class WordCountMap: public HadoopPipes::Mapper {
+ public:
+  HadoopPipes::TaskContext::Counter* inputWords;
+  
+  WordCountMap(HadoopPipes::TaskContext& context) {
+    inputWords = context.getCounter(WORDCOUNT, INPUT_WORDS);
+  }
+  
+  void map(HadoopPipes::MapContext& context) {
+    std::vector<std::string> words = 
+      HadoopUtils::splitString(context.getInputValue(), " ");
+    for (unsigned int i=0 ; i < words.size() ; i++) {
+      context.emit(words[i], "1");
+    }
+    context.incrementCounter(inputWords, words.size());
+  }
+};
+
+class WordCountReduce: public HadoopPipes::Reducer {
+ public:
+  HadoopPipes::TaskContext::Counter* outputWords;
+
+  WordCountReduce(HadoopPipes::TaskContext& context) {
+    outputWords = context.getCounter(WORDCOUNT, OUTPUT_WORDS);
+  }
+
+  void reduce(HadoopPipes::ReduceContext& context) {
+    int sum = 0;
+    while (context.nextValue()) {
+      sum += HadoopUtils::toInt(context.getInputValue());
+    }
+    context.emit(context.getInputKey(), HadoopUtils::toString(sum));
+    context.incrementCounter(outputWords, 1); 
+  }
+};
+
+class WordCountReader: public HadoopPipes::RecordReader {
+ private:
+  int64_t bytesTotal;
+  int64_t bytesRead;
+  FILE* file;
+ public:
+  WordCountReader(HadoopPipes::MapContext& context) {
+    std::string filename;
+    HadoopUtils::StringInStream stream(context.getInputSplit());
+    HadoopUtils::deserializeString(filename, stream);
+    struct stat statResult;
+    stat(filename.c_str(), &statResult);
+    bytesTotal = statResult.st_size;
+    bytesRead = 0;
+    file = fopen(filename.c_str(), "rt");
+    HADOOP_ASSERT(file != NULL, "failed to open " + filename);
+  }
+
+  ~WordCountReader() {
+    fclose(file);
+  }
+
+  virtual bool next(std::string& key, std::string& value) {
+    key = HadoopUtils::toString(ftell(file));
+    int ch = getc(file);
+    bytesRead += 1;
+    value.clear();
+    while (ch != -1 && ch != '\n') {
+      value += ch;
+      ch = getc(file);
+      bytesRead += 1;
+    }
+    return ch != -1;
+  }
+
+  /**
+   * The progress of the record reader through the split
+   * as a value between 0.0 and 1.0.
+   */
+  virtual float getProgress() {
+    if (bytesTotal > 0) {
+      return (float)bytesRead / bytesTotal;
+    } else {
+      return 1.0f;
+    }
+  }
+};
+
+class WordCountWriter: public HadoopPipes::RecordWriter {
+ private:
+  FILE* file;
+ public:
+  WordCountWriter(HadoopPipes::ReduceContext& context) {
+    const HadoopPipes::JobConf* job = context.getJobConf();
+    int part = job->getInt("mapred.task.partition");
+    std::string outDir = job->get("mapred.work.output.dir");
+    // remove the file: schema substring
+    std::string::size_type posn = outDir.find(":");
+    HADOOP_ASSERT(posn != std::string::npos, 
+                  "no schema found in output dir: " + outDir);
+    outDir.erase(0, posn+1);
+    mkdir(outDir.c_str(), 0777);
+    std::string outFile = outDir + "/part-" +
+                          HadoopUtils::toString(part);
+    file = fopen(outFile.c_str(), "wt");
+    HADOOP_ASSERT(file != NULL, "can't open file: " + outFile);
+  }
+
+  ~WordCountWriter() {
+    fclose(file);
+  }
+
+  void emit(const std::string& key, const std::string& value) {
+    fprintf(file, "%s -> %s\n", key.c_str(), value.c_str());
+  }
+};
+
+int main(int argc, char *argv[]) {
+  return HadoopPipes::runTask(
+    HadoopPipes::TemplateFactory<WordCountMap, WordCountReduce,
+                                 void, void, WordCountReader,
+                                 WordCountWriter>()
+  );
+}
+\end{lstlisting}
+
+\newpage
+\printbibliography
+
+\end{document}
+
+%TODO:
+%NFS
+%Compile jobs in Java
+%Detailed example of source code
+
+
