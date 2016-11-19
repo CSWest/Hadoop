@@ -31,7 +31,7 @@
 \definecolor{directive}{rgb}{0.47,0.28,0.18}
 \definecolor{string}{rgb}{0.85,0.16,0.14}
 \definecolor{comment}{rgb}{0.43,0.65,0.38}
-\lstset{
+\lstdefinestyle{cpp}{
   language=C++,
   tabsize=2,
   keepspaces=true,
@@ -44,14 +44,20 @@
   commentstyle=\color{comment}\ttfamily,
   morecomment=[l][\color{directive}]{\#}
 }
-% xml language
-\lstdefinelanguage{xml}{
-  morestring=[b]",
-  moredelim=[s]{>}{<},
-  morecomment=[s]{<?}{?>},
+\lstdefinestyle{xml}{
+  language=C++,
+  tabsize=2,
+  keepspaces=true,
+  showspaces=false,
+  showtabs=false,
+  showstringspaces=false,
+  basicstyle=\ttfamily\footnotesize,
   stringstyle=\color{string},
   identifierstyle=\color{directive},
   keywordstyle=\color{directive},
+  morestring=[b]",
+  moredelim=[s]{>}{<},
+  morecomment=[s]{<?}{?>},
   morekeywords={} % list attr here
 }
 
@@ -71,6 +77,9 @@ The objective of this tutorial is to give an overview of \textit{Hadoop}, its po
 ~\\
 This tutorial is based on my experience while working on a Special Problem. I included all the information I have been looking for and everything I think can be useful when learning how to use \textit{Hadoop}. Finally, while reading this tutorial, be aware that I am far from being a \textit{Hadoop} expert and that I just started to learn about \textit{Hadoop}. This is just a summary of the best of my knowledge at the time of writing.
 
+~\\
+After presenting \textit{Hadoop} and setting up a cluster, we will mainly focus on developing jobs in C++. Although jobs are usually written in Java, there are applications for which we need to be able to use C++. One of such situations is for being able to use the ROS API in our jobs. This will allow us to analyze datasets stored as \textit{rosbag}s as one possible application.
+
 \section{About \textit{Hadoop}}
 
   \subsection{What is it?}
@@ -81,10 +90,7 @@ In short, Apache\textsuperscript{TM} \textit{Hadoop}\textsuperscript{\textregist
 It is designed to scale up from single servers to thousands of machines, each offering local computation and storage. Rather than rely on hardware to deliver high-availability, the library itself is designed to detect and handle failures at the application layer, so delivering a highly-available service on top of a cluster of computers, each of which may be prone to failures.
 \end{quote}
 
-\textit{Hadoop} is supported by Hortonworks and Cloudera. Facebook and Yahoo! have been the first companies to massively use \textit{Hadoop}; the software is now used by a majority of companies.
-
-~\\
-Google's research papers inspired the \textit{Hadoop} File System and the \textit{MapReduce} implementation.
+\textit{Hadoop} is supported by Hortonworks and Cloudera. Facebook and Yahoo! have been the first companies to massively use \textit{Hadoop}; the software is now used by a majority of companies. Google's research papers \cite{google_1} \cite{google_2} inspired the \textit{Hadoop} File System and the \textit{MapReduce} implementation.
 
   \subsection{How does it work?}
 
@@ -198,16 +204,14 @@ The configuration differs from master and slave nodes. We will be listing here t
 
 \begin{itemize}
   \item \textit{core-site.xml}: here we will be telling hadoop how to reach the NameNode. Since our NameNode is the Master node, this parameter should link to the Master node:
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>fs.defaultFS</name>
         <value>hdfs://192.93.8.197:9000</value>
       </property>
     \end{lstlisting}
   \item \textit{hdfs-site.xml}: in this file we can set the replication level and where to store the files on the machine. We choose a replication level of 3, note that this replication level should approximately equal to the square root of the number of nodes in your cluster \cite{hadoop_mapred_default}:
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>dfs.replication</name>
         <value>3</value>
@@ -218,8 +222,7 @@ The configuration differs from master and slave nodes. We will be listing here t
       </property>
     \end{lstlisting}
   \item \textit{yarn-site.xml}: this is the configuration for YARN. Here, we tell YARN how to reach the ResourceManager, and that we want to perform MapReduce operations:
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>yarn.nodemanager.aux-services</name>
         <value>mapreduce_shuffle</value>
@@ -230,8 +233,7 @@ The configuration differs from master and slave nodes. We will be listing here t
       </property>
     \end{lstlisting}
   \item \textit{mapred-site.xml}: last, we need to give the address of the JobTracker to MapReduce, and we can also set the replication level for the submitted jobs. By default, the value for \texttt{mapreduce.client.submit.file.replication} is set to 10, which will lead to under-replicated blocks in your setup if not changed.
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>mapreduce.jobtracker.address<name>
         <value>192.93.8.197:54311</value>
@@ -249,8 +251,7 @@ Now let's see the configuration of the slave nodes. Here again we need to config
     
 \begin{itemize}
   \item \textit{hdfs-site.xml}: the configuration of HDFS will now require us to specify where to store the data, hence we will be using the property \texttt{dfs.datanode.data.dir} instead of \texttt{dfs.namenode.name.dir}:
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>dfs.replication</name>
         <value>3</value>
@@ -261,8 +262,7 @@ Now let's see the configuration of the slave nodes. Here again we need to config
       </property>
     \end{lstlisting}
   \item \textit{mapred-site.xml}: in this file we will be adding one more property compared to the configuration for the Master node, in order to tell the worker nodes to use YARN as their MapReduce framework:
-    \lstset{language=xml}
-    \begin{lstlisting}
+    \begin{lstlisting}[style=xml]
       <property>
         <name>mapreduce.jobtracker.address<name>
         <value>192.93.8.197:54311</value>
@@ -564,8 +564,7 @@ In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We h
   \section{WordCount.cpp}
   \label{wordcount} 
 
-\lstset{language=C++}
-\begin{lstlisting}
+\begin{lstlisting}[style=cpp]
 #include <algorithm>
 #include <limits>
 #include <string>
@@ -618,8 +617,7 @@ int main(int argc, char *argv[]) {
   \section{WordCount-NoPipe.cc}
   \label{wordcountnopipe}
   
-\lstset{language=C++}
-\begin{lstlisting}
+\begin{lstlisting}[style=cpp]
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
