@@ -131,8 +131,8 @@ In this tutorial, we will use the cluster as a model the cluster I have been usi
 % machines
 \node[minimum width=4cm, draw, rectangle] (M) at (0, 1) {\texttt{Master}};
 \node[minimum width=2.2cm, draw, rectangle] (S1) at (-1, -1) {\texttt{Slave 1}};
-\node[minimum width=2.2cm, draw, rectangle] (S2) at (2, -1) {\texttt{Slave 2}};
-\node[minimum width=2.2cm, rectangle] (Sd) at (5, -1) {\texttt{...}};
+\node[minimum width=2.2cm, draw, rectangle] (S2) at (2.5, -1) {\texttt{Slave 2}};
+\node[minimum width=2.2cm, rectangle] (Sd) at (5.25, -1) {\texttt{...}};
 \node[minimum width=2.2cm, draw, rectangle] (S5) at (8, -1) {\texttt{Slave 5}};
 \node[below=0.05cm of S1] (IPS1) {\texttt{192.168.0.101}};
 \node[below=0.05cm of S2] (IPS2) {\texttt{192.168.0.102}};
@@ -564,6 +564,7 @@ In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We h
   \section{WordCount.cpp}
   \label{wordcount} 
 
+\lstset{language=C++}
 \begin{lstlisting}
 #include <algorithm>
 #include <limits>
@@ -617,6 +618,7 @@ int main(int argc, char *argv[]) {
   \section{WordCount-NoPipe.cc}
   \label{wordcountnopipe}
   
+\lstset{language=C++}
 \begin{lstlisting}
 /**
  * Licensed to the Apache Software Foundation (ASF) under one
