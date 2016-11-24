@@ -15,8 +15,14 @@
 \usepackage{amsmath}        % \text
 \usepackage{multirow}       % \multirow   
 \usepackage{enumitem}       % \setitemsize
+\usepackage{appendix}       % appendix env
 \usepackage{pgf, tikz}      % graphe des états
 \usetikzlibrary{positioning}
+
+% center vertically
+\usepackage{titling}        
+\renewcommand\maketitlehooka{\null\mbox{}\vfill}
+\renewcommand\maketitlehookd{\vfill\null}
 
 % misc
 \addto\captionsenglish{\def\chaptername{Part}}    % Part/Chapter
@@ -66,9 +72,14 @@
 
 \begin{document}
 
+\begin{titlingpage}
 \maketitle
+\end{titlingpage}
+
+\newpage
 \tableofcontents
 %\listoffigures
+\newpage
 
 \section{Introduction}
 
@@ -420,13 +431,15 @@ If everything worked as expected, we are ready to go to the next step, where we 
 
 \section{Writing Jobs in C++ using \textit{Hadoop Pipes}}
 
-We now have a working installation of \textit{Hadoop}, but we can only work with Java. Our goal is to be able to write jobs in C++, combining \textit{ROS} and \textit{Hadoop} in the same job. \textit{Hadoop} provides \textit{Hadoop Pipes}, which allows us to write jobs in C++. We will first see how to get \textit{Hadoop Pipes} working, and then we will need to work a bit more to get \textit{Hadoop Pipes} and \textit{ROS} working on the same app. 
+We now have a working installation of \textit{Hadoop}, but we can only work with Java. Our goal is to be able to write jobs in C++, combining \textit{ROS} and \textit{Hadoop} in the same job. \textit{Hadoop} provides \textit{Hadoop Pipes}, which allows us to write jobs in C++. We will first see how to get \textit{Hadoop Pipes} working, and then we will need to work a bit more to get \textit{Hadoop Pipes} and \textit{ROS} working together.
 
 ~\\
-Prior to that, if you want to familiarize yourself with the MapReduce framework, you can find lots of examples of jobs online. Even though they are in Java, it is a good start to get an intuition of how jobs should be written. You can follow the Apache tutorial on MapReduce \cite{hadoop_mapreduce_tutorial}, or this great tutorial \cite{slideshare_tuto}.
+Prior to that, if you want to familiarize yourself with the \textit{MapReduce} framework, you can find lots of examples of jobs online. Even though they are in Java, it is a good start to get an intuition of how jobs should be written. You can follow the Apache tutorial on \textit{MapReduce} \cite{hadoop_mapreduce_tutorial}, or this great tutorial \cite{slideshare_tuto}.
 
   \subsection{Running a \textit{Hadoop Pipes} job}
   
+    \subsubsection{Compiling and Launching the Job}
+
 We will start with a simple example, following \cite{smith_pipes}. The code we are going to use in our first example is available in appendix \ref{wordcount}. We will need a Makefile in order to compile this program. This one will work, assuming you are on a 64-bit version:
 
 \begin{verbatim}
@@ -440,7 +453,7 @@ We will start with a simple example, following \cite{smith_pipes}. The code we a
     $(CC) $(CPPFLAGS) $< -o $@ -Wall $(LIBS) -g -O2
 \end{verbatim}
 
-You might need to install additional packages like \texttt{libssl-dev} to be able to compile without errors. Then compile using \texttt{make word\_count}. If you are getting errors make sure you correctly set \texttt{HADOOP\_INSTALL} and that all the libraries are installed.
+You might need to install additional packages like \texttt{libssl-dev} to be able to link without errors. Compile using \texttt{make word\_count}. If you are getting errors, make sure you have correctly set \texttt{HADOOP\_INSTALL} and that all the libraries are installed.
 
 ~\\
 If you managed to compile the program, we will first need to upload it on the filesystem before we can run it:
@@ -449,13 +462,13 @@ If you managed to compile the program, we will first need to upload it on the fi
   $ hdfs dfs -put word_count .
 \end{verbatim}
 
-Assuming you still have the input folder from the previous example, you can now run the job. If you did not previsouly delete the old output folder, you will get an error. To delete the old \textit{output} folder:
+Assuming you still have the input folder from the previous example, we can now run the job. If you did not previsouly delete the old output folder, you will get an error. To delete the old \textit{output} folder:
 
 \begin{verbatim}
   $ hdfs dfs -rm -r -f output
 \end{verbatim}
 
-You can now run the job:
+We can now run the job:
 
 \begin{verbatim}
   $ hadoop pipes -D hadoop.pipes.java.recordreader=true \
@@ -464,7 +477,7 @@ You can now run the job:
                  -program word_count
 \end{verbatim}
 
-The first two options tell \textit{Hadoop} to use the default Java RecordReader and RecordWriter classes. It is possible to implement these classes to get a custom behavior, but I could not find much documentation about this. There exists an example, \textit{wordcount-nopipe.cc}, in appendix \ref{wordcountnopipe}, that shows how to do that. Be aware that this only works with local file reads though. Other examples are provided online but without documentation. I also included them in the appendices.
+The first two options tell \textit{Hadoop} to use the default Java \textit{RecordReader} and \textit{RecordWriter} classes. It is possible to implement these classes to get a custom behavior, but I could not find much documentation about this. There exists an example, \textit{wordcount-nopipe.cc}, in appendix \ref{wordcountnopipe}, that shows how to do that. Be aware that this only works with local file reads though.
 
 ~\\
 If everything ran successfully, we can print the output:
@@ -472,12 +485,23 @@ If everything ran successfully, we can print the output:
 \begin{verbatim}
   $ hdfs dfs -cat output/*
 \end{verbatim}
+
+    \subsubsection{How Does This Job Work?}
   
-We now managed to get \textit{Hadoop Pipes} working. In the next section, we will see how to use \textit{Hadoop Pipes} and \textit{ROS} for writing our jobs.
+Let's quickly go through the code of this job and see what it does. This simple \textit{MapReduce} job has two classes: a \textit{Mapper} and a \textit{Reducer}. Pretty straightforward.
+
+~\\
+Let's first focus on the \textit{Mapper}. Its constructor takes one parameter, \texttt{context} that we are not using here. The intersting part is the \texttt{map} function, which takes a \texttt{HadoopPipes::MapContext} as its only parameter. This object contains all the pairs provided to this mapper from one partition of the input. The key and values are accessible via \texttt{getInputKey()} and \texttt{getInputValue()} respectively. For each word, the \textit{Mapper} outputs a pair \texttt{<word, 1>}. Note that everything needs to be a string. This is all that it does.
+
+~\\
+We can now study the \texttt{Reducer}. The reduce function is called with a context that contains all the pairs with the same key. In order to count the words, we therefore need to initialize a counter to 0 and increment it for each pair in the context. This is done in the \texttt{while} loop. After what we can simply output a pair with the same key as the input key, and the value of the counter as the output value. If you wonder why we emitted ones in the \textit{Mapper}, yes, this was absolutely useless, but we still needed to output some values.
+
+~\\
+This really is how this job works. So we managed to get \textit{Hadoop Pipes} working and we -- almost -- wrote our first job. In the next section, we will see how to use \textit{Hadoop Pipes} and \textit{ROS} for writing our jobs.
 
   \subsection{Using \textit{Hadoop Pipes} with \textit{ROS}}
 
-    \subsubsection{Creating new Libraries}
+    \subsubsection{Creating New Libraries}
 
 The following will help you understand how to write jobs using the C++ \textit{ROS} API. If you do not want to use \textit{ROS}, you can skip this section. Unfortunately, the provided \textit{Hadoop} libraries don't work well with the \textit{ROS} libraries. This is related to the compiler Application Binary Interface (ABI). \textit{ROS} and the \textit{Hadoop} library don't use the same ABI, hence they work poorly together. 
 
@@ -558,8 +582,8 @@ You need to check if your settings for replication are correctly set. Also, make
 In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We have also studied how to compile jobs for \textit{Hadoop} in C++, using \textit{Hadoop Pipes}, and how to use \textit{ROS} for our jobs. I hope you managed to set up your own cluster and that this document has been helpful. Now that your \textit{Hadoop} is working, it's time to write jobs!
 
 \newpage
-\appendix
-\addtocontents{toc}{\setcounter{tocdepth}{-1}}
+\begin{appendices}
+%\addtocontents{toc}{\setcounter{tocdepth}{-1}}
 
   \section{WordCount.cpp}
   \label{wordcount} 
@@ -576,7 +600,7 @@ In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We h
 #include "hadoop/StringUtils.hh"
 
 class WordCountMapper : public HadoopPipes::Mapper {
- public:
+  public:
   WordCountMapper(HadoopPipes::TaskContext& context) {}
   // map function: receives a line, outputs (word,"1") to reducer.
   void map(HadoopPipes::MapContext& context) {
@@ -590,9 +614,9 @@ class WordCountMapper : public HadoopPipes::Mapper {
     }
   }
 };
- 
+
 class WordCountReducer : public HadoopPipes::Reducer {
- public:
+  public:
   WordCountReducer(HadoopPipes::TaskContext& context) {}
   void reduce(HadoopPipes::ReduceContext& context) {
     int count = 0;
@@ -604,11 +628,11 @@ class WordCountReducer : public HadoopPipes::Reducer {
     context.emit(context.getInputKey(), HadoopUtils::toString(count));
   }
 };
- 
+
 int main(int argc, char *argv[]) {
   return HadoopPipes::runTask(
     HadoopPipes::TemplateFactory<WordCountMapper,
-                                 WordCountReducer>()
+                                  WordCountReducer>()
   );
 } 
 \end{lstlisting}
@@ -616,25 +640,25 @@ int main(int argc, char *argv[]) {
   \newpage
   \section{WordCount-NoPipe.cc}
   \label{wordcountnopipe}
-  
+
 \begin{lstlisting}[style=cpp]
 /**
- * Licensed to the Apache Software Foundation (ASF) under one
- * or more contributor license agreements.  See the NOTICE file
- * distributed with this work for additional information
- * regarding copyright ownership.  The ASF licenses this file
- * to you under the Apache License, Version 2.0 (the
- * "License"); you may not use this file except in compliance
- * with the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
- * implied. See the License for the specific language governing
- * permissions and limitations under the License.
- */
+  * Licensed to the Apache Software Foundation (ASF) under one
+  * or more contributor license agreements.  See the NOTICE file
+  * distributed with this work for additional information
+  * regarding copyright ownership.  The ASF licenses this file
+  * to you under the Apache License, Version 2.0 (the
+  * "License"); you may not use this file except in compliance
+  * with the License.  You may obtain a copy of the License at
+  *
+  *     http://www.apache.org/licenses/LICENSE-2.0
+  *
+  * Unless required by applicable law or agreed to in writing, software
+  * distributed under the License is distributed on an "AS IS" BASIS,
+  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+  * implied. See the License for the specific language governing
+  * permissions and limitations under the License.
+  */
 
 #include "hadoop/Pipes.hh"
 #include "hadoop/TemplateFactory.hh"
@@ -650,13 +674,13 @@ const std::string INPUT_WORDS = "INPUT_WORDS";
 const std::string OUTPUT_WORDS = "OUTPUT_WORDS";
 
 class WordCountMap: public HadoopPipes::Mapper {
- public:
+  public:
   HadoopPipes::TaskContext::Counter* inputWords;
-  
+
   WordCountMap(HadoopPipes::TaskContext& context) {
     inputWords = context.getCounter(WORDCOUNT, INPUT_WORDS);
   }
-  
+
   void map(HadoopPipes::MapContext& context) {
     std::vector<std::string> words = 
       HadoopUtils::splitString(context.getInputValue(), " ");
@@ -668,7 +692,7 @@ class WordCountMap: public HadoopPipes::Mapper {
 };
 
 class WordCountReduce: public HadoopPipes::Reducer {
- public:
+  public:
   HadoopPipes::TaskContext::Counter* outputWords;
 
   WordCountReduce(HadoopPipes::TaskContext& context) {
@@ -686,11 +710,11 @@ class WordCountReduce: public HadoopPipes::Reducer {
 };
 
 class WordCountReader: public HadoopPipes::RecordReader {
- private:
+  private:
   int64_t bytesTotal;
   int64_t bytesRead;
   FILE* file;
- public:
+  public:
   WordCountReader(HadoopPipes::MapContext& context) {
     std::string filename;
     HadoopUtils::StringInStream stream(context.getInputSplit());
@@ -721,9 +745,9 @@ class WordCountReader: public HadoopPipes::RecordReader {
   }
 
   /**
-   * The progress of the record reader through the split
-   * as a value between 0.0 and 1.0.
-   */
+    * The progress of the record reader through the split
+    * as a value between 0.0 and 1.0.
+    */
   virtual float getProgress() {
     if (bytesTotal > 0) {
       return (float)bytesRead / bytesTotal;
@@ -734,9 +758,9 @@ class WordCountReader: public HadoopPipes::RecordReader {
 };
 
 class WordCountWriter: public HadoopPipes::RecordWriter {
- private:
+  private:
   FILE* file;
- public:
+  public:
   WordCountWriter(HadoopPipes::ReduceContext& context) {
     const HadoopPipes::JobConf* job = context.getJobConf();
     int part = job->getInt("mapred.task.partition");
@@ -765,13 +789,15 @@ class WordCountWriter: public HadoopPipes::RecordWriter {
 int main(int argc, char *argv[]) {
   return HadoopPipes::runTask(
     HadoopPipes::TemplateFactory<WordCountMap, WordCountReduce,
-                                 void, void, WordCountReader,
-                                 WordCountWriter>()
+                                  void, void, WordCountReader,
+                                  WordCountWriter>()
   );
 }
 \end{lstlisting}
+\end{appendices}
 
 \newpage
+\addcontentsline{toc}{section}{References}
 \printbibliography
 
 \end{document}
