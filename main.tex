@@ -78,7 +78,7 @@ The objective of this tutorial is to give an overview of \textit{Hadoop}, its po
 This tutorial is based on my experience while working on a Special Problem. I included all the information I have been looking for and everything I think can be useful when learning how to use \textit{Hadoop}. Finally, while reading this tutorial, be aware that I am far from being a \textit{Hadoop} expert and that I just started to learn about \textit{Hadoop}. This is just a summary of the best of my knowledge at the time of writing.
 
 ~\\
-After presenting \textit{Hadoop} and setting up a cluster, we will mainly focus on developing jobs in C++. Although jobs are usually written in Java, there are applications for which we need to be able to use C++. One of such situations is for being able to use the ROS API in our jobs. This will allow us to analyze datasets stored as \textit{rosbag}s as one possible application.
+After presenting \textit{Hadoop} and how to set up a cluster, we will mainly focus on developing jobs in C++. Although jobs are usually written in Java, there are applications for which we need to be able to use C++. One of such situations is for being able to use the ROS API in our jobs. This will allow us to analyze datasets stored as \textit{rosbag}s as one possible application.
 
 \section{About \textit{Hadoop}}
 
@@ -94,14 +94,16 @@ It is designed to scale up from single servers to thousands of machines, each of
 
   \subsection{How does it work?}
 
+Before jumping into the technical part of the tutorial, this section will introduce the main components of Hadoop as well as an overview of what is a job. We will also introduce the architecture of Hadoop clusters and what processes need to run on the machines.
+
     \subsubsection{Components}
   
-\textit{Hadoop} is the union of \textit{base modules} and lots of other modules built on top of \textit{Hadoop}. We will only focus on the \textit{base modules} here. The base modules are as follow:
+\textit{Hadoop} is the union of \textit{base modules} and lots of other modules built on top of \textit{Hadoop}. We will only focus on the \textit{base modules} here. The base modules are the following ones:
 \begin{itemize}
   \item \textit{\textit{Hadoop} Common}: this is a core module that provides libraries to the other modules.
-  \item \textit{\textit{Hadoop} Distributed File System (HDFS)}: HDFS is a distributed filesystem on which we will be storing the data we want to analyze using \textit{Hadoop}.
+  \item \textit{\textit{Hadoop} Distributed File System (HDFS)}: HDFS is a distributed filesystem on which we will be storing the data we want to analyze using \textit{Hadoop}. Alternatives to HDFS exist, but HDFS remains a good choice for the following reasons \cite{horton}: first the cost of storing data on HDFS is really low compared to other solutions that might not be open-source. HDFS is also tailored for MapReduce and allows a very high bandwith even on very low-cost shared networks. Last, HDFS is designed to work on commodity hardware, and thus can handle failures and lost data autonomously.
   \item \textit{\textit{Hadoop} YARN}: YARN is used for the scheduling of the applications and the resource management.
-  \item \textit{\textit{Hadoop} MapReduce}: \textit{MapReduce} is an implementation of the \textit{MapReduce} programming model.
+  \item \textit{\textit{Hadoop} MapReduce}: \textit{MapReduce} is an implementation of the \textit{MapReduce} programming model. This is the framework we will use while writing jobs.
 \end{itemize}
 
 If you want to work with data, the first step is to upload it on HDFS. The next step is to write a \textit{MapReduce} job that will be later run on the cluster. The scheduling will be taken care of by YARN.
@@ -111,17 +113,17 @@ Among the other available auxiliary projects built on top of \textit{Hadoop}, Hi
 
     \subsubsection{Writing jobs}
 
-\textit{Hadoop} is written in Java and as a result, most of the documentation and online support is in Java. However, it is possible to write jobs in C++ using \textit{Hadoop} Pipes. This is what we will be doing since we are roboticists who want to be able to use the \textit{ROS} API in our jobs.
-
-~\\
 Jobs are the applications that are run on the data stored on HDFS. Actually, \textit{Hadoop} can also be run as a standalone application, without HDFS, but we won't be using \textit{Hadoop} this way. A simple application consists of two parts: a Mapper and a Reducer. The framework reads the input data and provides pairs \texttt{<key, value>} to the Mapper. By default, \textit{Hadoop} provides pairs with the following format: \texttt{<offset, line>}. Applications can provide their own Reader and Writers to customize these operations.
 
 ~\\
 The Mapper receives these pairs and outputs another pair. This is all it does, and yet allows any kind of computation -- we will see examples later. The Mapper can put whatever information is useful in these pairs. The Reducer receives the pairs from the Mapper and outputs the final pairs \texttt{<key, value>} that will be the output of the job.
 
+~\\
+\textit{Hadoop} is written in Java and as a result, most of the documentation and online support is in Java. However, it is possible to write jobs in C++ using \textit{Hadoop} Pipes. This is what we will be doing since we are roboticists who want to be able to use the \textit{ROS} API in our jobs.
+
     \subsubsection{Cluster Architecture}
 
-For huge datasets that span over multiple racks, HDFS provides location awareness: the processing happens on nodes that are close to the requested data. This reduces network traffic. The setup we will describe here is a much smaller one, using a cluster one master node and five slave nodes.
+Hadoop runs on clusters of -- often thousands of -- computers. For huge datasets that span over multiple racks, HDFS provides location awareness: the processing happens on nodes that are close to the requested data: this reduces network traffic and is one of the key advantages of using HDFS. The setup we will describe here is a much smaller one, using a cluster one master node and five slave nodes.
 
 ~\\
 A typical \textit{Hadoop} setup has the following structure:
@@ -154,23 +156,25 @@ In this tutorial, we will use the cluster as a model the cluster I have been usi
 
 Here is a list of the processes that run on the nodes. Some processes are used for HDFS while the other category is used during the \textit{MapReduce} phase:
 \begin{itemize}
-  \item \textit{NameNode}, \textit{JobTracker}: these processes run on the Master node. The NameNode is used as a registry of the data in the cluster while the JobTracker is used during the \textit{MapReduce} phase. A SecondaryNameNode can be run for the safety reasons discussed just above.
-  \item \textit{DataNode}, \textit{TaskTracker}: these processes belong to the slaves. Note that it is also possible to run these processes on the Master node in small clusters. The DataNode handles the storage and the TaskTracker becomes useful during the \textit{MapReduce} phase.
+  \item \textit{NameNode}, \textit{JobTracker}: these processes run on the Master node. The \textit{NameNode} is used as a registry of the data in the cluster, and the JobTracker is used during the \textit{MapReduce} phase. A \textit{SecondaryNameNode} can be run for the safety reasons discussed just above.
+  \item \textit{DataNode}, \textit{TaskTracker}: these processes belong to the slaves. Note that it is also possible to run these processes on the Master node in small clusters. The \textit{DataNode} handles the storage and the \textit{TaskTracker} becomes useful during the \textit{MapReduce} phase.
 \end{itemize}
 
 \section{Setting Up a \textit{Hadoop} Cluster}
 
-The single node setup is well explained on the Apache tutorial \cite{hadoop_single_node_setup}. Instead, we will directly go to the setup of a cluster of multiple nodes. We will then run the example mapreduce jobs, and we will start developing jobs in C++ in the next section.
+Now that we have scratched the surface of Hadoop in the previous introduction, we are ready for the first step in using Hadoop. Before writing jobs, we need to set up the structure on which we will launch these jobs. This step is about setting up a Hadoop cluster.
+
+Hadoop can be run on one single node, and it might be useful to start from there to get familiar with the tools. The single node setup is well explained on the Apache tutorial \cite{hadoop_single_node_setup}. Here, we will directly go to the setup of a cluster of multiple nodes. We will then run the example mapreduce jobs, before we can start developing jobs in C++.
 
 ~\\
-We will start by installing \textit{Hadoop} on all our machines. We will then setup all the tools needed by \textit{Hadoop} and we will configure our \textit{Hadoop} installation.
+We will start by installing \textit{Hadoop} on all our machines and setting up all the tools that it needs. Then, we will configure our \textit{Hadoop} installation.
 
   \subsection{Installing \textit{Hadoop}}
   
 Here, we will almost be following the Apache tutorial \cite{hadoop_single_node_setup}. The first step is to create a \textit{Hadoop} user: let's call it \textit{hadoop}, and everything \textit{Hadoop}-related we will do will be done with this user. I have been using \textit{Hadoop} 2.7.3 while working on this tutorial, you can get it here: http://hadoop.apache.org/releases.html. Install it wherever you find convenient, I chose \textit{/home/hadoop/bin}. We will also need to install Java if it is not already installed. \textit{Hadoop} 2.7 and later versions require Java 7 \cite{hadoop_java_versions}.
 
 ~\\
-Assuming Java and \textit{Hadoop} are correctly installed, update your \textit{.bashrc} as follow, in order to give \textit{Hadoop} everything it needs to work properly. Here is what I used on my setup:
+Assuming Java and \textit{Hadoop} are correctly installed, update your \textit{.bashrc} as follows, in order to give \textit{Hadoop} everything it needs to work properly. Here is what I have been using on my setup:
 
 \begin{verbatim}
   export HADOOP_HOME=/home/hadoop/bin/hadoop-2.7.3
@@ -179,7 +183,7 @@ Assuming Java and \textit{Hadoop} are correctly installed, update your \textit{.
   export HADOOP_CLASSPATH=${JAVA_HOME}/lib/tools.jar
 \end{verbatim}
 
-Note that \textit{HADOOP\_HOME} is not required, but it will make it easier for us to use this variable to refer to where \textit{Hadoop} is installed.  In the same file, I also decided to add bin folders to my path. We will be using tools in \textit{HADOOP\_HOME/sbin}, which contains useful scripts, and in \textit{HADOOP\_HOME/bin}, which contains hadoop and hdfs:
+Note that \textit{HADOOP\_HOME} is not required, but it will make it easier for us to use this variable to refer to where \textit{Hadoop} is installed.  In the same file, I also decided to add \textit{bin} folders to my path. We will be using tools in \textit{HADOOP\_HOME/sbin}, which contains useful scripts, and in \textit{HADOOP\_HOME/bin}, which contains the hadoop and hdfs binaries:
 
 \begin{verbatim}
   export PATH=${HADOOP_HOME}/sbin/:${HADOOP_HOME}/bin/:${PATH}
@@ -189,8 +193,8 @@ We now jump to the configuration of \textit{Hadoop}. Four files, on each machine
 \begin{itemize}
   \item \textit{HADOOP\_HOME/etc/hadoop/core-site.xml}: this file contains the core configuration. One important setting we will put in there is how to reach the filesystem.
   \item \textit{HADOOP\_HOME/etc/hadoop/hdfs-site.xml}: this is the configuration of the filesystem: the replication level, where to store the data, and the different types of nodes.
-  \item \textit{HADOOP\_HOME/etc/hadoop/yarn-site.xml}: configuration for YARN, like how to reach the ResourceManager.
-  \item \textit{HADOOP\_HOME/etc/hadoop/mapred-site.xml}: this file contains the configuration for the MapReduce jobs: they need to know how to reach the JobTracker.
+  \item \textit{HADOOP\_HOME/etc/hadoop/yarn-site.xml}: configuration for YARN, like how to reach the \textit{ResourceManager}.
+  \item \textit{HADOOP\_HOME/etc/hadoop/mapred-site.xml}: this file contains the configuration for the \textit{MapReduce} jobs: they need to know how to reach the \textit{JobTracker.}
 \end{itemize}
 
 All the configuration goes into these four files. The parameters will influence the way \textit{Hadoop} performs the tasks and you should have a look at the read-only versions of these files for a detailed explanation of the different parameters \cite{hadoop_core_default} \cite{hadoop_hdfs_default} \cite{hadoop_yarn_default} \cite{hadoop_mapred_default}.
@@ -203,14 +207,14 @@ Here I give the set of parameters that I have been using with my \textit{Hadoop}
 The configuration differs from master and slave nodes. We will be listing here the minimum set of parameters that need to be set on the master node's configuration files. All we need to do is put the following \texttt{<property>} tags between the \texttt{<configuration>} and \texttt{</configuration>} tags:
 
 \begin{itemize}
-  \item \textit{core-site.xml}: here we will be telling hadoop how to reach the NameNode. Since our NameNode is the Master node, this parameter should link to the Master node:
+  \item \textit{core-site.xml}: here we will be telling hadoop how to reach the \textit{NameNode}. Since our \textit{NameNode} is the Master node, this parameter should link to the Master node:
     \begin{lstlisting}[style=xml]
       <property>
         <name>fs.defaultFS</name>
         <value>hdfs://192.93.8.197:9000</value>
       </property>
     \end{lstlisting}
-  \item \textit{hdfs-site.xml}: in this file we can set the replication level and where to store the files on the machine. We choose a replication level of 3, note that this replication level should approximately equal to the square root of the number of nodes in your cluster \cite{hadoop_mapred_default}:
+  \item \textit{hdfs-site.xml}: in this file we can set the replication level and where to store the files on the machine. We choose a replication level of 3, note that this replication level should approximately be equal to the square root of the number of nodes in your cluster \cite{hadoop_mapred_default}:
     \begin{lstlisting}[style=xml]
       <property>
         <name>dfs.replication</name>
@@ -221,7 +225,7 @@ The configuration differs from master and slave nodes. We will be listing here t
         <value>file:///home/hadoop/hadoop_data/namenode</value>
       </property>
     \end{lstlisting}
-  \item \textit{yarn-site.xml}: this is the configuration for YARN. Here, we tell YARN how to reach the ResourceManager, and that we want to perform MapReduce operations:
+  \item \textit{yarn-site.xml}: this is the configuration for YARN. Here, we tell YARN how to reach the \textit{ResourceManager}, and that we want to perform \textit{MapReduce} operations:
     \begin{lstlisting}[style=xml]
       <property>
         <name>yarn.nodemanager.aux-services</name>
@@ -232,7 +236,7 @@ The configuration differs from master and slave nodes. We will be listing here t
         <value>192.93.8.197</value>
       </property>
     \end{lstlisting}
-  \item \textit{mapred-site.xml}: last, we need to give the address of the JobTracker to MapReduce, and we can also set the replication level for the submitted jobs. By default, the value for \texttt{mapreduce.client.submit.file.replication} is set to 10, which will lead to under-replicated blocks in your setup if not changed.
+  \item \textit{mapred-site.xml}: last, we need to give the address of the \textit{JobTracker} to \textit{MapReduce,} and we can also set the replication level for the submitted jobs. By default, the value for \texttt{mapreduce.client.submit.file.replication} is set to 10, which will lead to under-replicated blocks in your setup if not changed.
     \begin{lstlisting}[style=xml]
       <property>
         <name>mapreduce.jobtracker.address<name>
@@ -261,7 +265,7 @@ Now let's see the configuration of the slave nodes. Here again we need to config
         <value>file:///home/hadoop/hadoop_data/datanode</value>
       </property>
     \end{lstlisting}
-  \item \textit{mapred-site.xml}: in this file we will be adding one more property compared to the configuration for the Master node, in order to tell the worker nodes to use YARN as their MapReduce framework:
+  \item \textit{mapred-site.xml}: in this file we will be adding one more property compared to the configuration for the Master node, in order to tell the worker nodes to use YARN as their \textit{MapReduce} framework:
     \begin{lstlisting}[style=xml]
       <property>
         <name>mapreduce.jobtracker.address<name>
@@ -278,10 +282,9 @@ Now let's see the configuration of the slave nodes. Here again we need to config
     \end{lstlisting}
 \end{itemize}
     
-  
   \subsection{Hostnames, \textit{SSH}}
-  
-Before we can start the nodes, we need to setup \textit{ssh} on all the machines and set the hostnames of each as well. This is really important, and can be the source of lots of errors if not set right at first. \textit{Hadoop} communicates over \textit{ssh} between different nodes. It also uses the machines hostnames rather than their IP addresses.
+
+Now Hadoop should be correctly configured. But before we can start the nodes, we need to setup \textit{ssh} on all the machines and set the hostnames of each as well. This is really important, and can be the source of lots of errors if not set right at first. \textit{Hadoop} communicates over \textit{ssh} between different nodes. It also uses the machines hostnames rather than their IP addresses.
 
 ~\\
 Therefore we need to set up these two things. First, let's get \textit{ssh} working. \textit{Hadoop} requires that each node can reach any other node over \textit{ssh}, without a passphrase \cite{hadoop_single_node_setup}. If you cannot do so, running the following commands should solve the issue:
@@ -296,10 +299,7 @@ If \textit{ssh} is correctly configured, we can set the hostnames of our machine
 
     \subsubsection{Slave Nodes}
     
-On the Slave nodes, let's start by setting the hostname of each machine. On my setup, I have the hostnames \texttt{slave1} to \texttt{slave5}.
-
-~\\
-Regarding the \textit{/etc/hosts} file, each worker node should have access to all the other nodes. Each of my slave nodes has the following file:
+On the Slave nodes, let's start by setting the hostname of each machine. On my setup, I have the hostnames \texttt{slave1} to \texttt{slave5}. In the \textit{/etc/hosts} file, each worker node should have access to all the other nodes. Each of my slave nodes has the following file:
 
 \begin{verbatim}
   127.0.0.1       localhost
@@ -358,39 +358,39 @@ Now that the filesystem is formatted, we can create our home folder where we wil
   $ hdfs dfs -mkdir -p /user/hadoop
 \end{verbatim}
 
-We can now start HDFS, then YARN. The scripts are located in \textit{HADOOP\_HOME/sbin}:
+Note that a lot of basic commands are availble on HDFS. We have just used \texttt{mkdir}, but likewise, \texttt{ls}, \texttt{cat}, \texttt{mv} are also available. We can now start HDFS, then YARN. The scripts are located in \textit{HADOOP\_HOME/sbin}:
 
 \begin{verbatim}
-  $ sbin/start-dfs.sh
-  $ sbin/start-yarn.sh
+  HADOOP_HOME $ sbin/start-dfs.sh
+  HADOOP_HOME $ sbin/start-yarn.sh
 \end{verbatim}
 
 If you have added this folder to your \texttt{PATH}, you should be able to run them without specifying the folder. Alternatively, you can run \texttt{start-all.sh}, which works well and starts both at once, even though it is deprecated. If you run \texttt{jps}, you should see this list on the master node:
-\begin{itemize}
-  \item NameNode
-  \item SecondaryNameNode
-  \item ResourceManager
-\end{itemize}
+\begin{verbatim}
+  NameNode
+  SecondaryNameNode
+  ResourceManager
+\end{verbatim}
 
 If you run the same command on one of the slaves, you should see this list instead:
-\begin{itemize}
-  \item DataNode
-  \item NodeManager
-\end{itemize}
+\begin{verbatim}
+  DataNode
+  NodeManager
+\end{verbatim}
 
-Anytime, you can go to http://\_IP\_:50070 -- with the IP address of the master node -- to see the nodes usage in real-time. You can monitor all the applications at http://\_IP\_:8088. Tools are also available in command line:
+Anytime, you can go to http://IP:50070 -- with the IP address of the master node -- to see the nodes usage in real-time. You can monitor all the applications at http://IP:8088. Useful tools are also available in command line:
 
 \begin{verbatim}
   $ hdfs dfsadmin -printTopology   # displays a topology of the setup
   $ hdfs dfsadmin -report          # creates a complete report
 \end{verbatim}
 
-  \subsection{MapReduce Example}
+  \subsection{\textit{MapReduce} Example}
 
-To make sure our cluster is correctly set up, let's try to run a first mapreduce job. An job is provided in the \textit{Hadoop} installation. It just counts the words in the input files and displays them with the associated count. 
+To make sure our cluster is correctly set up, let's try to run a first \textit{MapReduce} job. An job is provided in the \textit{Hadoop} installation. It just counts the words in the input files and displays them with the associated count. 
 
 ~\\
-To run this example we first need to create our input. You can just copy all the \textit{xml} files in \textit{HADOOP\_HOME/etc/hadoop} in a folder \textit{input}, and upload this folder on HDFS:
+To run this example we first need to create our input. An input is a folder containing files we want to work on. You can just copy all the \textit{xml} files in \textit{HADOOP\_HOME/etc/hadoop} in a folder \textit{input}, and upload this folder on HDFS:
 
 \begin{verbatim}
   HADOOP_HOME $ mkdir input
@@ -406,17 +406,17 @@ You can make sure the folder has been correctly uploaded by running \texttt{hdfs
            grep input output 'dfs[a-z.]+'
 \end{verbatim}
 
-This command tells to use \textit{Hadoop} to launch a jar, located in \textit{HADOOP\_HOME/share/...}. Then \textit{Hadoop} will launch the class \texttt{grep} -- not the command-line grep tool -- to perform the job. It will use \textit{input} as its input folder and will output the results in \textit{output}. Finally, the results will contain all the words that match the regular expression \texttt{dfs[a-z.]+}.
+This command tells \textit{Hadoop} to launch a jar, located in \textit{HADOOP\_HOME/share/...}. In this jar, we are intersted in launching the class \texttt{grep} -- not the command-line grep tool -- to perform the job. \textit{Hadoop} will use \textit{input} as its input folder and will output the results in \textit{output}. Finally, the results will contain all the words that match the regular expression \texttt{dfs[a-z.]+}.
 
 ~\\
-After a few seconds, the job should complete. You can check the GUI anytime to check if everything is working properly. If the job ran successfully, the output is available in \textit{output}. We can read it from the filesystem, or download it and then read it:
+After a few seconds, the job should -- successfully -- complete. If the job failed, maybe you can find some help in the troubleshooting section at the end of this tutorial. You can also check the GUI anytime to check if everything is working properly. The output is available in \textit{output}. We can read it from the filesystem, or download it and then read it:
 
 \begin{verbatim}
   $ hdfs dfs -cat output/*                        # read from HDFS
   $ hdfs dfs -get output output && cat output/*   # download then read
 \end{verbatim}
 
-If everything worked with no problem, we are ready to go to the next step, where we will be using both \textit{ROS} and \textit{Hadoop Pipes} in a C++ mapreduce job. You can find more information about writing jobs in Java, and tutorials on the Apache website \cite{hadoop_mapreduce_tutorial}.
+If everything worked as expected, we are ready to go to the next step, where we will be using both \textit{ROS} and \textit{Hadoop Pipes} in a C++ mapreduce job. You can find more information about writing jobs in Java, and tutorials on the Apache website \cite{hadoop_mapreduce_tutorial}.
 
 \section{Writing Jobs in C++ using \textit{Hadoop Pipes}}
 
