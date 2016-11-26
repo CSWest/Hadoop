@@ -369,7 +369,7 @@ Now that the filesystem is formatted, we can create our home folder where we wil
   $ hdfs dfs -mkdir -p /user/hadoop
 \end{verbatim}
 
-Note that a lot of basic commands are availble on HDFS. We have just used \texttt{mkdir}, but likewise, \texttt{ls}, \texttt{cat}, \texttt{mv} are also available. We can now start HDFS, then YARN. The scripts are located in \textit{HADOOP\_HOME/sbin}:
+Note that a lot of basic commands are available on HDFS. We have just used \texttt{mkdir}, but likewise, \texttt{ls}, \texttt{cat}, \texttt{mv} are also available. We can now start HDFS, then YARN. The scripts are located in \textit{HADOOP\_HOME/sbin}:
 
 \begin{verbatim}
   HADOOP_HOME $ sbin/start-dfs.sh
@@ -433,9 +433,6 @@ If everything worked as expected, we are ready to go to the next step, where we 
 
 We now have a working installation of \textit{Hadoop}, but we can only work with Java. Our goal is to be able to write jobs in C++, combining \textit{ROS} and \textit{Hadoop} in the same job. \textit{Hadoop} provides \textit{Hadoop Pipes}, which allows us to write jobs in C++. We will first see how to get \textit{Hadoop Pipes} working, and then we will need to work a bit more to get \textit{Hadoop Pipes} and \textit{ROS} working together.
 
-~\\
-Prior to that, if you want to familiarize yourself with the \textit{MapReduce} framework, you can find lots of examples of jobs online. Even though they are in Java, it is a good start to get an intuition of how jobs should be written. You can follow the Apache tutorial on \textit{MapReduce} \cite{hadoop_mapreduce_tutorial}, or this great tutorial \cite{slideshare_tuto}.
-
   \subsection{Running a \textit{Hadoop Pipes} job}
   
     \subsubsection{Compiling and Launching the Job}
@@ -491,22 +488,27 @@ If everything ran successfully, we can print the output:
 Let's quickly go through the code of this job and see what it does. This simple \textit{MapReduce} job has two classes: a \textit{Mapper} and a \textit{Reducer}. Pretty straightforward.
 
 ~\\
-Let's first focus on the \textit{Mapper}. Its constructor takes one parameter, \texttt{context} that we are not using here. The intersting part is the \texttt{map} function, which takes a \texttt{HadoopPipes::MapContext} as its only parameter. This object contains all the pairs provided to this mapper from one partition of the input. The key and values are accessible via \texttt{getInputKey()} and \texttt{getInputValue()} respectively. For each word, the \textit{Mapper} outputs a pair \texttt{<word, 1>}. Note that everything needs to be a string. This is all that it does.
+Let's first focus on the \textit{Mapper}. Its constructor takes one parameter, \texttt{context} that we are not using here. The intersting part is the \texttt{map} function, which takes a \texttt{MapContext} as its only parameter. This object contains all the pairs provided to this mapper from one partition of the input. The key and values are accessible via \texttt{getInputKey()} and \texttt{getInputValue()} respectively. For each word, the \textit{Mapper} outputs a pair \texttt{<word, 1>}. Note that everything needs to be a string. This is all that it does.
 
 ~\\
 We can now study the \texttt{Reducer}. The reduce function is called with a context that contains all the pairs with the same key. In order to count the words, we therefore need to initialize a counter to 0 and increment it for each pair in the context. This is done in the \texttt{while} loop. After what we can simply output a pair with the same key as the input key, and the value of the counter as the output value. If you wonder why we emitted ones in the \textit{Mapper}, yes, this was absolutely useless, but we still needed to output some values.
 
 ~\\
-This really is how this job works. So we managed to get \textit{Hadoop Pipes} working and we -- almost -- wrote our first job. In the next section, we will see how to use \textit{Hadoop Pipes} and \textit{ROS} for writing our jobs.
+This really is how this job works. If you want to familiarize yourself with the \textit{MapReduce} framework, you can find lots of examples of jobs online. Even though they are in Java, it is a good start to get an intuition of how jobs should be written. You can follow the Apache tutorial on \textit{MapReduce} \cite{hadoop_mapreduce_tutorial}, or this great tutorial \cite{slideshare_tuto}.
+
+~\\
+So we managed to get \textit{Hadoop Pipes} working and we -- almost -- wrote our first job. In the next section, we will see how to use \textit{Hadoop Pipes} and \textit{ROS} for writing our jobs.
 
   \subsection{Using \textit{Hadoop Pipes} with \textit{ROS}}
 
+We finally get to the section that initiated the writing of this tutorial: how to use \textit{Hadoop} to write jobs that use ROS. \textit{Hadoop} and Java are great for lots of domains, and jobs should be written in Java if possible. Using Pipes should only be used when there is no alternative. The fact that we want to use ROS in our jobs is one great reason to do so. The following will help you understand how to write jobs using the C++ \textit{ROS} API. If you do not want to use \textit{ROS}, you can skip this section.
+
     \subsubsection{Creating New Libraries}
 
-The following will help you understand how to write jobs using the C++ \textit{ROS} API. If you do not want to use \textit{ROS}, you can skip this section. Unfortunately, the provided \textit{Hadoop} libraries don't work well with the \textit{ROS} libraries. This is related to the compiler Application Binary Interface (ABI). \textit{ROS} and the \textit{Hadoop} library don't use the same ABI, hence they work poorly together. 
+Unfortunately, the provided \textit{Hadoop} libraries don't work well with the \textit{ROS} libraries. This is related to the compiler Application Binary Interface (ABI). \textit{ROS} and the \textit{Hadoop} library don't use the same ABI, hence they work poorly together. 
 
 ~\\
-To get them working, you will need to recompile \textit{Hadoop} from source. Following the steps on the Apache guide \cite{native_libs}, run the following commands:
+To get them working, you will need to recompile \textit{Hadoop} from source. After downloading, following the steps on the Apache guide \cite{native_libs}, run the following commands:
 
 \begin{verbatim}
   mvn package -Pdist,native -DskipTests -Dtar
@@ -515,11 +517,14 @@ To get them working, you will need to recompile \textit{Hadoop} from source. Fol
 In order to compile \textit{Hadoop} successfully, you will need to install \texttt{protoc} -- Protocol Buffers -- version 2.5.0 and this version only. You can get it on Google's github \cite{google_github}. The archive should be available at: https://github.com/google/protobuf/archive/v2.5.0.tar.gz.
 
 ~\\
-You will get the newly-bilt library in \textit{hadoop-dist/target/hadoop-2.7.3/lib/native}. From now on, use these libraries instead of the ones in \textit{HADOOP\_HOME/lib}.
+You will get the newly-bilt library in \textit{hadoop-dist/target/hadoop-2.7.3/lib/native}. From now on, use these libraries instead of the ones in \textit{HADOOP\_HOME/lib} and everything should work fine.
 
     \subsubsection{A Job with \textit{ROS} and \textit{Hadoop Pipes}}
   
-We can now go back to our initial goal of compiling a job with \textit{Hadoop Pipes} that makes use of the \textit{ROS} API. We will need to update our Makefile to link the \textit{ROS} libraries. Note that I've put the newly-built libraries in \textit{/home/hadoop/lib/hadoop/lib}.
+We can now go back to our initial goal of compiling a job with \textit{Hadoop Pipes} that makes use of the \textit{ROS} API. We will first see how to update our Makefile, them we will show how to use Catkin to do all the work for us.
+
+~\\
+We will need to update our Makefile to link the \textit{ROS} libraries. Note that I've put the newly-built libraries in \textit{/home/hadoop/lib/hadoop/lib}.
 
 \begin{verbatim}
   CC             = g++
@@ -534,6 +539,37 @@ We can now go back to our initial goal of compiling a job with \textit{Hadoop Pi
   ros_example: ros_example.cpp
     $(CC) $(CPPFLAGS) $< -o $@ -Wall $(LIBS) -g -O2
 \end{verbatim}
+
+This new Makefile indicates where to find the right \textit{libraries}. This is all we needed to add. Using this, you should be able to compile jobs in C++, using \textit{Hadoop} and \textit{ROS} libraries.
+
+    \subsubsection{Using \textit{Hadoop}, \textit{ROS} and \textit{Catkin}}
+
+For modern versions of ROS, compilation is made using \textit{Catkin}. In order to keep using it to compile our jobs, we just need to create a package with the right dependencies and \textit{CMakeLists.txt} file. Let's follow the procedure from the beginning: first we need to create a new package:
+
+\begin{verbatim}
+  $ catkin_create_pkg ros_example
+\end{verbatim}
+
+We then need to edit the file \textit{package.xml}. In the dependencies section, add \texttt{roscpp} to specify that we will be using C++. More important, we need to edit the \textit{CMakeLists.txt} file to include \textit{Pipes} and link \textit{Hadoop} as well as \textit{ROS}:
+
+\begin{lstlisting}[style=xml]
+  TODO
+\end{lstlisting}
+
+With this file, we should be able to compile our code using \texttt{catkin\_make}. The binary will be in the directory \texttt{build} of your \textit{Catkin} workspace.
+
+  \subsection{An Example of Job to Analyze rosbags}
+
+To complete our introduction on using ROS with \textit{Hadoop} we are going to write a job that analyzes rosbags and counts the different values for a given topic in the file.
+
+~\\
+The structure is very similar to that of the first job we have studied. We will have one class for the \textit{Mapper}, one for the \textit{Reducer}. This does not change. What changes is that rosbags cannot be read directly by \textit{Hadoop}. While looking for a more elegant solution, we are going to store our rosbags on a shared folder that will be accessed by the nodes through NFS. The job's input will instead be a folder containing the paths of these files. Therefore each entry of the \textit{Map} task will be the path of a file that we can open using the \textit{ROS} API.
+
+~\\
+Once the file is open, we need to create a view of this file for the topic of our choice. The view can provide us with iterators throught the file. As for the word count, we now just need to iterate through the values and output them as the key, with a value that will not be used. After iterating through the values, we close the bag and return.
+
+~\\
+Now for the \textit{Reducer}, we read all the values, and increment a counter for every value. After iterating through all the keys, we output the key and its counter. The code is available in appendix \ref{valuecount}.
 
 \section{Troubleshooting}
 
@@ -566,16 +602,23 @@ Let's start with issues when launching a job. First you should go have a look in
     \subsubsection*{Running a Job Fails}
 
 Hadoop will not overwrite an output folder. You should always make sure to delete the previous output folders or to specify a different folder for later jobs. If \textit{Hadoop} is trying to reach a node and is having trouble, check if all the nodes are up. Sometimes some nodes are \textit{decommissionned} and you need to start the right processes again. Running \texttt{start-all.sh} from the master should launch all the missing nodes.
+
+~\\
+Once again, checking the logs will most likely tell you the source of the error. Another error related to the use of ROS is that some nodes could be missing librairies required by your job. You need to make sure all your nodes are correctly configured before going on.
    
     \subsubsection*{The job hangs at \textit{map 0\%, reduce 0\%}}
 
-Make sure you have set the hostnames right, and that you can \textit{ssh} to any node without a passphrase. In any case, the logs should tell you what happened, but this issue happened to me due to network issues.
+Make sure you have set the hostnames right, and that you can \textit{ssh} to any node without a passphrase. In any case, the logs should tell you what happened, but this issue happened to me due to network issues. This can also be due to an error in your code that causes an exception. Typically, if your \textit{Mapper} is correct but your \textit{Reducer} is wrong, you will most likely see the task hang at \textit{map 100\%, reduce 0\%}.
     
   \subsection{Monitoring}
   
     \subsubsection*{Positive amount of under-replicated blocks}
     
 You need to check if your settings for replication are correctly set. Also, make sure \texttt{mapreduce.client.submit.file.replication} is set, otherwise its default value of 10 will lead to under-replicated blocks if your cluster has less than ten machines.
+
+  \subsection{Writing Jobs}
+
+Finally, while writing jobs, make sure to never cut a stream, meaning that a \textit{Mapper} or \textit{Reducer} should only return once it has extracted all the pairs that it was given. Also, make sure your stream has pairs available to be read before extracting one.
 
 \section{Conclusion}
 
