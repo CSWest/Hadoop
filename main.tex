@@ -16,7 +16,7 @@
 \usepackage{multirow}       % \multirow   
 \usepackage{enumitem}       % \setitemsize
 \usepackage{appendix}       % appendix env
-\usepackage{pgf, tikz}      % graphe des états
+\usepackage{pgf, tikz}      % network architecture
 \usetikzlibrary{positioning}
 
 % center vertically
@@ -550,12 +550,53 @@ For modern versions of ROS, compilation is made using \textit{Catkin}. In order 
   $ catkin_create_pkg ros_example
 \end{verbatim}
 
-We then need to edit the file \textit{package.xml}. In the dependencies section, add \texttt{roscpp} to specify that we will be using C++. More important, we need to edit the \textit{CMakeLists.txt} file to include \textit{Pipes} and link \textit{Hadoop} as well as \textit{ROS}:
+We then need to edit the file \textit{package.xml}. In the dependencies section, add \texttt{roscpp} to specify that we will be using C++, as well as all the other needed dependencies for your project:
 
 \begin{lstlisting}[style=xml]
-  TODO
+  <buildtool_depend>catkin</buildtool_depend>
+  <build_depend>roscpp</build_depend>
+  <build_depend>rostime</build_depend>
+  <build_depend>rosbag</build_depend>
+  <build_depend>rosbag_storage</build_depend>
+  <build_depend>rosconsole</build_depend>
+  <build_depend>std_msgs</build_depend>
+  <run_depend>roscpp</run_depend>
+  <run_depend>rostime</run_depend>
+  <run_depend>rosbag</run_depend>
+  <run_depend>rosbag_storage</run_depend>
+  <run_depend>rosconsole</run_depend>
+  <run_depend>std_msgs</run_depend>
 \end{lstlisting}
 
+More important, we need to edit the \textit{CMakeLists.txt} file to include \textit{Pipes} and link \textit{Hadoop} as well as \textit{ROS}:
+
+\begin{lstlisting}[style=xml]
+  cmake_minimum_required(VERSION 2.8.3)
+  project(example)
+  find_package(catkin REQUIRED COMPONENTS
+    roscpp rosconsole rostime rosbag rosbag_storage
+  )
+  catkin_package(
+    CATKIN_DEPENDS roscpp
+  )
+  include_directories(~/bin/hadoop-2.7.3/include ${catkin_INCLUDE_DIRS})
+  add_definitions(-g -ggdb -std=c++14 -Wall -O3)
+  link_directories(/home/hadoop/lib/hadoop/lib)
+  add_executable(example ros_example.cpp)
+  target_link_libraries(example
+    hadooppipes hadoop hadooputils crypto pthread ssl
+  )
+  target_link_libraries(example ${catkin_LIBRARIES})
+  install(TARGETS example
+    ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+    RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+  )
+\end{lstlisting}
+
+There is nothing really special about this file. It is a standard \textit{CMakeLists.txt} file with instructions to include and link everything required by \textit{Hadoop}.
+
+~\\
 With this file, we should be able to compile our code using \texttt{catkin\_make}. The binary will be in the directory \texttt{build} of your \textit{Catkin} workspace.
 
   \subsection{An Example of Job to Analyze rosbags}
@@ -566,10 +607,13 @@ To complete our introduction on using ROS with \textit{Hadoop} we are going to w
 The structure is very similar to that of the first job we have studied. We will have one class for the \textit{Mapper}, one for the \textit{Reducer}. This does not change. What changes is that rosbags cannot be read directly by \textit{Hadoop}. While looking for a more elegant solution, we are going to store our rosbags on a shared folder that will be accessed by the nodes through NFS. The job's input will instead be a folder containing the paths of these files. Therefore each entry of the \textit{Map} task will be the path of a file that we can open using the \textit{ROS} API.
 
 ~\\
-Once the file is open, we need to create a view of this file for the topic of our choice. The view can provide us with iterators throught the file. As for the word count, we now just need to iterate through the values and output them as the key, with a value that will not be used. After iterating through the values, we close the bag and return.
+Once the file is open, we need to create a view of this file for the topic of our choice. The view can provide us with iterators through the file. As for the word count, we now just need to iterate through the values and output them as the key, with a value that will not be used. After iterating through the values, we close the bag and return.
 
 ~\\
-Now for the \textit{Reducer}, we read all the values, and increment a counter for every value. After iterating through all the keys, we output the key and its counter. The code is available in appendix \ref{valuecount}.
+Now for the \textit{Reducer}, we read all the values, and increment a counter for every value. After iterating through all the keys, we output the key and its counter.
+
+~\\
+The code for this example is available in appendix \ref{valuecount}. You can compile it with the command \texttt{catkin\_make}, upload the program on HDFS and run it with an input being a folder of files containing paths to your actual rosbags
 
 \section{Troubleshooting}
 
@@ -622,7 +666,13 @@ Finally, while writing jobs, make sure to never cut a stream, meaning that a \te
 
 \section{Conclusion}
 
-In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We have also studied how to compile jobs for \textit{Hadoop} in C++, using \textit{Hadoop Pipes}, and how to use \textit{ROS} for our jobs. I hope you managed to set up your own cluster and that this document has been helpful. Now that your \textit{Hadoop} is working, it's time to write jobs!
+In this tutorial, we have seen how to set up a cluster for \textit{Hadoop}. We have also studied how to compile jobs for \textit{Hadoop} in C++, using \textit{Hadoop Pipes}, and how to use \textit{ROS} for our jobs.
+
+~\\
+Regarding performances, during my work I have managed to interpolate three days of data in 40 minutes, using the cluster described above in the tutorial.  However the way I have been using \textit{Hadoop}, through shared files on NFS, would not scale properly to larger structures where we could not benefit of the rack-awareness. Instead, with a preprocessing step to extract the data in the \textit{rosbags} in \textit{csv} files, we should be able to use Hadoop the way it is supposed to be used.
+
+~\\
+I hope you managed to set up your own cluster and that this document has been helpful. Now that your \textit{Hadoop} is working, it's time to write jobs!
 
 \newpage
 \begin{appendices}
@@ -837,6 +887,67 @@ int main(int argc, char *argv[]) {
   );
 }
 \end{lstlisting}
+
+  \newpage
+  \section{ros\_example.cpp}
+  \label{valuecount}
+
+\begin{lstlisting}[style=cpp]
+#include <vector>
+
+#include "Pipes.hh"
+#include "StringUtils.hh"
+#include "SerialUtils.hh"
+
+#include "ros/ros.h"
+#include "rosbag/view.h"
+#include "rosbag/structures.h"
+#include "geometry_msgs/Twist.h"
+
+class ExampleMap : public HadoopPipes::Mapper {
+ public:
+  ExampleMap(HadoopPipes::TaskContext& context) {}
+  void map(HadoopPipes::MapContext& context) {
+    // extract paths from input
+    std::vector<std::string> paths = 
+        HadoopUtils::splitString(context.getInputValue(), " ");
+    for (unsigned int i=0; i < paths.size(); ++i) {
+      // open rosbag file, create a view and an iterator on this view
+      std::string path = "/mnt/nfs/" + paths[i];
+      rosbag::Bag bag(path);
+      rosbag::View topic_view(bag, rosbag::TopicQuery("/cmd_vel"));
+      rosbag::View::iterator j = topic_view.begin();
+      // iterate through the values
+      for (; j != topic_view.end(); j++) {
+        // instantiate a message from the view
+        boost::shared_ptr<geometry_msgs::Twist> m =
+            j->instantiate<geometry_msgs::Twist>();
+        // emit linear.x as a key, with random value
+        context.emit("angular x " + std::to_string(m->angular.x), "1");
+      }
+      bag.close();
+    }
+  }
+};
+
+class ExampleReduce : public HadoopPipes::Reducer {
+ public:
+  ExampleReduce(HadoopPipes::TaskContext& context) {}
+  void reduce(HadoopPipes::ReduceContext& context) {
+    int count = 0;
+    while (context.nextValue()) count++;
+    // output the final result
+    context.emit(context.getInputKey(), std::to_string(count));
+  }
+};
+
+int main(int argc, char *argv[]) {
+  return HadoopPipes::runTask(
+    HadoopPipes::TemplateFactory<ExampleMap, ExampleReduce>()
+  );
+}
+\end{lstlisting}
+
 \end{appendices}
 
 \newpage
@@ -844,10 +955,5 @@ int main(int argc, char *argv[]) {
 \printbibliography
 
 \end{document}
-
-%TODO:
-%NFS
-%Compile jobs in Java
-%Detailed example of source code
 
 
