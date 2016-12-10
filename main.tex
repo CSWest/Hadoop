@@ -112,7 +112,7 @@ Before jumping into the technical part of the tutorial, this section will introd
 \textit{Hadoop} is the union of \textit{base modules} and lots of other modules built on top of \textit{Hadoop}. We will only focus on the \textit{base modules} here. The base modules are the following ones:
 \begin{itemize}
   \item \textit{\textit{Hadoop} Common}: this is a core module that provides libraries to the other modules.
-  \item \textit{\textit{Hadoop} Distributed File System (HDFS)}: HDFS is a distributed filesystem on which we will be storing the data we want to analyze using \textit{Hadoop}. Alternatives to HDFS exist, but HDFS remains a good choice for the following reasons \cite{horton}: first the cost of storing data on HDFS is really low compared to other solutions that might not be open-source. HDFS is also tailored for MapReduce and allows a very high bandwith even on very low-cost shared networks. Last, HDFS is designed to work on commodity hardware, and thus can handle failures and lost data autonomously.
+  \item \textit{\textit{Hadoop} Distributed File System (HDFS)}: HDFS is a distributed file system on which we will be storing the data we want to analyze using \textit{Hadoop}. Alternatives to HDFS exist, but HDFS remains a good choice for the following reasons \cite{horton}: first the cost of storing data on HDFS is really low compared to other solutions that might not be open-source. HDFS is also tailored for MapReduce and allows a very high bandwidth even on very low-cost shared networks. Last, HDFS is designed to work on commodity hardware, and thus can handle failures and lost data autonomously.
   \item \textit{\textit{Hadoop} YARN}: YARN is used for the scheduling of the applications and the resource management.
   \item \textit{\textit{Hadoop} MapReduce}: \textit{MapReduce} is an implementation of the \textit{MapReduce} programming model. This is the framework we will use while writing jobs.
 \end{itemize}
@@ -202,13 +202,13 @@ Note that \textit{HADOOP\_HOME} is not required, but it will make it easier for 
 
 We now jump to the configuration of \textit{Hadoop}. Four files, on each machine, need to be correctly updated. There is one file for each base module. The read-only versions, with the default values, have names \textit{base-module-default.xml}. The files that will need to be updated on the machines have the \textit{-site.xml} suffix instead. They are listed below:
 \begin{itemize}
-  \item \textit{HADOOP\_HOME/etc/hadoop/core-site.xml}: this file contains the core configuration. One important setting we will put in there is how to reach the filesystem.
-  \item \textit{HADOOP\_HOME/etc/hadoop/hdfs-site.xml}: this is the configuration of the filesystem: the replication level, where to store the data, and the different types of nodes.
+  \item \textit{HADOOP\_HOME/etc/hadoop/core-site.xml}: this file contains the core configuration. One important setting we will put in there is how to reach the file system.
+  \item \textit{HADOOP\_HOME/etc/hadoop/hdfs-site.xml}: this is the configuration of the file system: the replication level, where to store the data, and the different types of nodes.
   \item \textit{HADOOP\_HOME/etc/hadoop/yarn-site.xml}: configuration for YARN, like how to reach the \textit{ResourceManager}.
   \item \textit{HADOOP\_HOME/etc/hadoop/mapred-site.xml}: this file contains the configuration for the \textit{MapReduce} jobs: they need to know how to reach the \textit{JobTracker.}
 \end{itemize}
 
-All the configuration goes into these four files. The parameters will influence the way \textit{Hadoop} performs the tasks and you should have a look at the read-only versions of these files for a detailed explanation of the different parameters \cite{hadoop_core_default} \cite{hadoop_hdfs_default} \cite{hadoop_yarn_default} \cite{hadoop_mapred_default}.
+The entire configuration goes into these four files. The parameters will influence the way \textit{Hadoop} performs the tasks and you should have a look at the read-only versions of these files for a detailed explanation of the different parameters \cite{hadoop_core_default} \cite{hadoop_hdfs_default} \cite{hadoop_yarn_default} \cite{hadoop_mapred_default}.
 
 ~\\
 Here I give the set of parameters that I have been using with my \textit{Hadoop} setup. This configuration works well for simple tasks but you will likely need to tune the parameters if you plan to make extensive use of \textit{Hadoop}.
@@ -357,13 +357,13 @@ For \textit{HADOOP\_HOME/etc/hadoop/slaves}, I have listed the hostnames of the 
 
   \subsection{Starting the Cluster}
   
-Everything should now be correctly set up and we should be able to run the cluster. We first need to format the filesystem:
+Everything should now be correctly set up and we should be able to run the cluster. We first need to format the file system:
 
 \begin{verbatim}
   $ hdfs namenode -format
 \end{verbatim}
 
-Now that the filesystem is formatted, we can create our home folder where we will later upload our input files:
+Now that the file system is formatted, we can create our home folder where we will later upload our input files:
 
 \begin{verbatim}
   $ hdfs dfs -mkdir -p /user/hadoop
@@ -398,7 +398,7 @@ Anytime, you can go to http://IP:50070 -- with the IP address of the master node
 
   \subsection{\textit{MapReduce} Example}
 
-To make sure our cluster is correctly set up, let's try to run a first \textit{MapReduce} job. An job is provided in the \textit{Hadoop} installation. It just counts the words in the input files and displays them with the associated count. 
+To make sure our cluster is correctly set up, let's try to run a first \textit{MapReduce} job. A job is provided in the \textit{Hadoop} installation. It just counts the words in the input files and displays them with the associated count. 
 
 ~\\
 To run this example we first need to create our input. An input is a folder containing files we want to work on. You can just copy all the \textit{xml} files in \textit{HADOOP\_HOME/etc/hadoop} in a folder \textit{input}, and upload this folder on HDFS:
@@ -417,10 +417,10 @@ You can make sure the folder has been correctly uploaded by running \texttt{hdfs
            grep input output 'dfs[a-z.]+'
 \end{verbatim}
 
-This command tells \textit{Hadoop} to launch a jar, located in \textit{HADOOP\_HOME/share/...}. In this jar, we are intersted in launching the class \texttt{grep} -- not the command-line grep tool -- to perform the job. \textit{Hadoop} will use \textit{input} as its input folder and will output the results in \textit{output}. Finally, the results will contain all the words that match the regular expression \texttt{dfs[a-z.]+}.
+This command tells \textit{Hadoop} to launch a jar, located in \textit{HADOOP\_HOME/share/...}. In this jar, we are interested in launching the class \texttt{grep} -- not the command-line grep tool -- to perform the job. \textit{Hadoop} will use \textit{input} as its input folder and will output the results in \textit{output}. Finally, the results will contain all the words that match the regular expression \texttt{dfs[a-z.]+}.
 
 ~\\
-After a few seconds, the job should -- successfully -- complete. If the job failed, maybe you can find some help in the troubleshooting section at the end of this tutorial. You can also check the GUI anytime to check if everything is working properly. The output is available in \textit{output}. We can read it from the filesystem, or download it and then read it:
+After a few seconds, the job should -- successfully -- complete. If the job failed, maybe you can find some help in the troubleshooting section at the end of this tutorial. You can also check the GUI anytime to check if everything is working properly. The output is available in \textit{output}. We can read it from the file system, or download it and then read it:
 
 \begin{verbatim}
   $ hdfs dfs -cat output/*                        # read from HDFS
@@ -453,13 +453,13 @@ We will start with a simple example, following \cite{smith_pipes}. The code we a
 You might need to install additional packages like \texttt{libssl-dev} to be able to link without errors. Compile using \texttt{make word\_count}. If you are getting errors, make sure you have correctly set \texttt{HADOOP\_INSTALL} and that all the libraries are installed.
 
 ~\\
-If you managed to compile the program, we will first need to upload it on the filesystem before we can run it:
+If you managed to compile the program, we will first need to upload it on the file system before we can run it:
 
 \begin{verbatim}
   $ hdfs dfs -put word_count .
 \end{verbatim}
 
-Assuming you still have the input folder from the previous example, we can now run the job. If you did not previsouly delete the old output folder, you will get an error. To delete the old \textit{output} folder:
+Assuming you still have the input folder from the previous example, we can now run the job. If you did not previously delete the old output folder, you will get an error. To delete the old \textit{output} folder:
 
 \begin{verbatim}
   $ hdfs dfs -rm -r -f output
@@ -474,7 +474,7 @@ We can now run the job:
                  -program word_count
 \end{verbatim}
 
-The first two options tell \textit{Hadoop} to use the default Java \textit{RecordReader} and \textit{RecordWriter} classes. It is possible to implement these classes to get a custom behavior, but I could not find much documentation about this. There exists an example, \textit{wordcount-nopipe.cc}, in appendix \ref{wordcountnopipe}, that shows how to do that. Be aware that this only works with local file reads though.
+The first two options tell \textit{Hadoop} to use the default Java \textit{RecordReader} and \textit{RecordWriter} classes. It is possible to implement these classes to get a custom behavior, but I could not find much documentation about this. There exists an example, \textit{wordcount-nopipe.cc}, in appendix \ref{wordcountnopipe}, which shows how to do that. Be aware that this only works with local file reads though.
 
 ~\\
 If everything ran successfully, we can print the output:
@@ -488,7 +488,7 @@ If everything ran successfully, we can print the output:
 Let's quickly go through the code of this job and see what it does. This simple \textit{MapReduce} job has two classes: a \textit{Mapper} and a \textit{Reducer}. Pretty straightforward.
 
 ~\\
-Let's first focus on the \textit{Mapper}. Its constructor takes one parameter, \texttt{context} that we are not using here. The intersting part is the \texttt{map} function, which takes a \texttt{MapContext} as its only parameter. This object contains all the pairs provided to this mapper from one partition of the input. The key and values are accessible via \texttt{getInputKey()} and \texttt{getInputValue()} respectively. For each word, the \textit{Mapper} outputs a pair \texttt{<word, 1>}. Note that everything needs to be a string. This is all that it does.
+Let's first focus on the \textit{Mapper}. Its constructor takes one parameter, \texttt{context} that we are not using here. The interesting part is the \texttt{map} function, which takes a \texttt{MapContext} as its only parameter. This object contains all the pairs provided to this mapper from one partition of the input. The key and values are accessible via \texttt{getInputKey()} and \texttt{getInputValue()} respectively. For each word, the \textit{Mapper} outputs a pair \texttt{<word, 1>}. Note that everything needs to be a string. This is all that it does.
 
 ~\\
 We can now study the \texttt{Reducer}. The reduce function is called with a context that contains all the pairs with the same key. In order to count the words, we therefore need to initialize a counter to 0 and increment it for each pair in the context. This is done in the \texttt{while} loop. After what we can simply output a pair with the same key as the input key, and the value of the counter as the output value. If you wonder why we emitted ones in the \textit{Mapper}, yes, this was absolutely useless, but we still needed to output some values.
@@ -645,10 +645,10 @@ Let's start with issues when launching a job. First you should go have a look in
   
     \subsubsection*{Running a Job Fails}
 
-Hadoop will not overwrite an output folder. You should always make sure to delete the previous output folders or to specify a different folder for later jobs. If \textit{Hadoop} is trying to reach a node and is having trouble, check if all the nodes are up. Sometimes some nodes are \textit{decommissionned} and you need to start the right processes again. Running \texttt{start-all.sh} from the master should launch all the missing nodes.
+Hadoop will not overwrite an output folder. You should always make sure to delete the previous output folders or to specify a different folder for later jobs. If \textit{Hadoop} is trying to reach a node and is having trouble, check if all the nodes are up. Sometimes some nodes are \textit{decommissioned} and you need to start the right processes again. Running \texttt{start-all.sh} from the master should launch all the missing nodes.
 
 ~\\
-Once again, checking the logs will most likely tell you the source of the error. Another error related to the use of ROS is that some nodes could be missing librairies required by your job. You need to make sure all your nodes are correctly configured before going on.
+Once again, checking the logs will most likely tell you the source of the error. Another error related to the use of ROS is that some nodes could be missing libraries required by your job. You need to make sure all your nodes are correctly configured before going on.
    
     \subsubsection*{The job hangs at \textit{map 0\%, reduce 0\%}}
 
